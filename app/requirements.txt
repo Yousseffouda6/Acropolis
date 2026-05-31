@@ -1,0 +1,18 @@
+# Acropolis Notes - pinned dependencies.
+#
+# Web framework + its stack
+Flask==3.0.3
+Werkzeug==3.0.3
+Jinja2==3.1.4
+MarkupSafe==2.1.5
+itsdangerous==2.2.0
+click==8.1.7
+blinker==1.8.2
+
+# Feature libraries
+PyYAML==6.0.2          # YAML import/export (VULN #4 sink uses the unsafe loader)
+Markdown==3.6          # Markdown -> HTML rendering (rendered unsafely, VULN #6)
+
+# VULN #5: a knowingly outdated dependency kept for the SCA scanner to flag.
+# It is intentionally NOT imported anywhere at runtime.
+requests==2.19.1

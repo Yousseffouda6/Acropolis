@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% macro brand_mark() %}
+<svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true">
+  <rect x="2.5" y="3.5" width="19" height="2.6" rx="1"/>
+  <rect x="5" y="7" width="2.4" height="10.2"/>
+  <rect x="10.8" y="7" width="2.4" height="10.2"/>
+  <rect x="16.6" y="7" width="2.4" height="10.2"/>
+  <rect x="2" y="18" width="20" height="2.8" rx="1"/>
+</svg>
+{% endmacro %}
+
+{% block layout %}
+<div class="app">
+  <aside class="sidebar">
+    <a class="brand" href="{{ url_for('dashboard') }}">
+      {{ brand_mark() }}
+      <span class="brand__name">Acropolis<strong>Notes</strong></span>
+    </a>
+
+    <nav class="nav" aria-label="Primary">
+      <a class="nav__link {{ 'is-active' if request.endpoint == 'dashboard' and not request.args.get('tag') }}"
+         href="{{ url_for('dashboard') }}">
+        <span class="nav__icon" aria-hidden="true">&#9632;</span> Dashboard
+      </a>
+      <a class="nav__link {{ 'is-active' if request.endpoint == 'new_note' }}"
+         href="{{ url_for('new_note') }}">
+        <span class="nav__icon" aria-hidden="true">&#43;</span> New note
+      </a>
+      <a class="nav__link {{ 'is-active' if request.endpoint == 'settings' }}"
+         href="{{ url_for('settings') }}">
+        <span class="nav__icon" aria-hidden="true">&#9881;</span> Settings
+      </a>
+    </nav>
+
+    {% if sidebar_tags %}
+    <div class="nav-section">
+      <p class="nav-section__title">Tags</p>
+      <div class="tag-list">
+        {% for tag in sidebar_tags %}
+        <a class="tag-pill {{ 'is-active' if request.args.get('tag') == tag }}"
+           href="{{ url_for('dashboard', tag=tag) }}">#{{ tag }}</a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="sidebar__footer">
+      <div class="usercard">
+        <span class="usercard__avatar" aria-hidden="true">{{ (nav_username or '?')[0]|upper }}</span>
+        <span class="usercard__name">{{ nav_username }}</span>
+      </div>
+      <a class="nav__link nav__link--muted" href="{{ url_for('logout') }}">Log out</a>
+    </div>
+  </aside>
+
+  <main class="main">
+    {% block main %}{% endblock %}
+  </main>
+</div>
+{% endblock %}

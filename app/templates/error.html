@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} - Acropolis Notes{% endblock %}
+{% block body_class %}auth{% endblock %}
+
+{% block layout %}
+<div class="auth-wrap">
+  <div class="card auth-card error-card">
+    <p class="error-card__code">{{ code }}</p>
+    <h1 class="auth-card__title">
+      {% if code == 404 %}Nothing here{% elif code == 403 %}Not allowed{% else %}Something went wrong{% endif %}
+    </h1>
+    <p class="auth-card__sub">{{ message }}</p>
+    <a class="btn btn--primary" href="{{ url_for('index') }}">Back to safety</a>
+  </div>
+</div>
+{% endblock %}

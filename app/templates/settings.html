@@ -1,0 +1,48 @@
+{% extends "shell.html" %}
+{% block title %}Settings - Acropolis Notes{% endblock %}
+
+{% block main %}
+<header class="page-head">
+  <h1 class="page-head__title">Settings</h1>
+</header>
+
+<section class="card settings-card">
+  <h2 class="settings-card__title">Profile</h2>
+  <dl class="kv">
+    <dt>Username</dt>
+    <dd>{{ nav_username }}</dd>
+    <dt>API key</dt>
+    <dd>
+      <div class="copy-row">
+        <code class="api-key" id="api-key">{{ api_key }}</code>
+        <button class="btn btn--ghost btn--sm" type="button"
+                data-copy="#api-key">Copy</button>
+      </div>
+      <p class="settings-card__hint">Use this key to authenticate against the Acropolis API.</p>
+    </dd>
+  </dl>
+</section>
+
+<section class="card settings-card">
+  <h2 class="settings-card__title">Import notes</h2>
+  <p class="settings-card__hint">Paste a YAML list of notes, or upload a <code>.yaml</code> file exported from Acropolis Notes.</p>
+  <form method="post" action="{{ url_for('import_notes') }}"
+        enctype="multipart/form-data" class="form">
+    <label class="field">
+      <span class="field__label">YAML</span>
+      <textarea class="input textarea textarea--mono" name="yaml_data" rows="8"
+                placeholder="- title: My note&#10;  body: Hello from YAML&#10;  tags: imported, demo"></textarea>
+    </label>
+    <div class="form__row">
+      <input class="file-input" type="file" name="yaml_file" accept=".yaml,.yml,.txt">
+      <button class="btn btn--primary" type="submit">Import</button>
+    </div>
+  </form>
+</section>
+
+<section class="card settings-card">
+  <h2 class="settings-card__title">Export notes</h2>
+  <p class="settings-card__hint">Download all of your notes as a portable YAML file.</p>
+  <a class="btn btn--ghost" href="{{ url_for('export_notes') }}">Export as YAML</a>
+</section>
+{% endblock %}

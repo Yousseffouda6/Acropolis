@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Create account - Acropolis Notes{% endblock %}
+{% block body_class %}auth{% endblock %}
+
+{% block layout %}
+<div class="auth-wrap">
+  <a class="brand brand--center" href="{{ url_for('index') }}">
+    <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="2.5" y="3.5" width="19" height="2.6" rx="1"/>
+      <rect x="5" y="7" width="2.4" height="10.2"/>
+      <rect x="10.8" y="7" width="2.4" height="10.2"/>
+      <rect x="16.6" y="7" width="2.4" height="10.2"/>
+      <rect x="2" y="18" width="20" height="2.8" rx="1"/>
+    </svg>
+    <span class="brand__name">Acropolis<strong>Notes</strong></span>
+  </a>
+
+  <div class="card auth-card">
+    <h1 class="auth-card__title">Create your account</h1>
+    <p class="auth-card__sub">Start writing in under a minute.</p>
+
+    <form method="post" action="{{ url_for('register') }}" class="form" novalidate>
+      <label class="field">
+        <span class="field__label">Username</span>
+        <input class="input" type="text" name="username" value="{{ username }}"
+               autocomplete="username" autofocus required>
+      </label>
+      <label class="field">
+        <span class="field__label">Password</span>
+        <input class="input" type="password" name="password"
+               autocomplete="new-password" required>
+      </label>
+      <button class="btn btn--primary btn--block" type="submit">Create account</button>
+    </form>
+
+    <p class="auth-card__alt">
+      Already registered? <a href="{{ url_for('login') }}">Log in</a>
+    </p>
+  </div>
+</div>
+{% endblock %}

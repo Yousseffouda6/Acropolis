@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Acropolis Notes - a calm home for your thinking{% endblock %}
+{% block body_class %}landing{% endblock %}
+
+{% block layout %}
+<header class="topbar">
+  <a class="brand" href="{{ url_for('index') }}">
+    <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="2.5" y="3.5" width="19" height="2.6" rx="1"/>
+      <rect x="5" y="7" width="2.4" height="10.2"/>
+      <rect x="10.8" y="7" width="2.4" height="10.2"/>
+      <rect x="16.6" y="7" width="2.4" height="10.2"/>
+      <rect x="2" y="18" width="20" height="2.8" rx="1"/>
+    </svg>
+    <span class="brand__name">Acropolis<strong>Notes</strong></span>
+  </a>
+  <nav class="topbar__nav">
+    <a class="btn btn--ghost" href="{{ url_for('login') }}">Log in</a>
+    <a class="btn btn--primary" href="{{ url_for('register') }}">Create account</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <p class="eyebrow">Markdown notes, beautifully organised</p>
+    <h1 class="hero__title">A calm home<br>for your thinking.</h1>
+    <p class="hero__lede">
+      Capture ideas in Markdown, tag them, and find anything in a keystroke.
+      Acropolis Notes is fast, focused, and stays out of your way.
+    </p>
+    <div class="hero__actions">
+      <a class="btn btn--primary btn--lg" href="{{ url_for('register') }}">Get started - it's free</a>
+      <a class="btn btn--ghost btn--lg" href="{{ url_for('login') }}">I already have an account</a>
+    </div>
+
+    <div class="hero__preview" aria-hidden="true">
+      <div class="preview-card">
+        <div class="preview-card__bar"><span></span><span></span><span></span></div>
+        <div class="preview-card__body">
+          <h3>Q2 project ideas</h3>
+          <p>1. Migrate the build to multi-arch images</p>
+          <p>2. Publish a public changelog</p>
+          <p>3. Run the quarterly security review</p>
+          <div class="preview-card__tags"><span>#work</span><span>#ideas</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="features">
+    <article class="feature">
+      <span class="feature__icon" aria-hidden="true">&#9998;</span>
+      <h3>Write in Markdown</h3>
+      <p>Headings, lists, tables and code blocks render instantly. No fuss, just text.</p>
+    </article>
+    <article class="feature">
+      <span class="feature__icon" aria-hidden="true">&#35;</span>
+      <h3>Organise with tags</h3>
+      <p>Tag a note and filter your whole library down to exactly what matters.</p>
+    </article>
+    <article class="feature">
+      <span class="feature__icon" aria-hidden="true">&#9906;</span>
+      <h3>Search in a keystroke</h3>
+      <p>Live search scans titles, bodies and tags as you type. Find it before you finish typing.</p>
+    </article>
+    <article class="feature">
+      <span class="feature__icon" aria-hidden="true">&#8645;</span>
+      <h3>Import &amp; export</h3>
+      <p>Bring notes in or take them with you as portable YAML. Your data is yours.</p>
+    </article>
+  </section>
+
+  <section class="cta-band">
+    <h2>Ready when you are.</h2>
+    <p>Create an account and write your first note in under a minute.</p>
+    <a class="btn btn--primary btn--lg" href="{{ url_for('register') }}">Create your account</a>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <p>Acropolis Notes &middot; part of the <strong>Acropolis</strong> security lab.</p>
+  <p class="site-footer__note">
+    Demonstration software: this build intentionally contains planted security
+    vulnerabilities for training. Do not use it for real data.
+  </p>
+</footer>
+{% endblock %}

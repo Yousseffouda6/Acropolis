@@ -1,0 +1,41 @@
+{% extends "shell.html" %}
+{% block title %}{{ note.title }} - Acropolis Notes{% endblock %}
+
+{% block main %}
+<div class="note-view">
+  <a class="link-back" href="{{ url_for('dashboard') }}">&larr; All notes</a>
+
+  <article class="card note-doc">
+    <header class="note-doc__head">
+      {# VULN #6: title rendered as raw HTML (no escaping). #}
+      <h1 class="note-doc__title">{{ note.title|safe }}</h1>
+      <p class="note-doc__meta">
+        by <strong>{{ owner }}</strong>
+        &middot; updated {{ note.updated_at[:16] }}
+      </p>
+      {% if tags %}
+      <div class="note-doc__tags">
+        {% for tag in tags %}
+        <a class="tag-pill tag-pill--sm" href="{{ url_for('dashboard', tag=tag) }}">#{{ tag }}</a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </header>
+
+    {# VULN #6: Markdown rendered to HTML with no sanitisation, emitted raw. #}
+    <div class="note-doc__body markdown">{{ body_html|safe }}</div>
+  </article>
+
+  {% if is_owner %}
+  <div class="note-actions">
+    <a class="btn btn--ghost" href="{{ url_for('edit_note', note_id=note.id) }}">Edit</a>
+    <form method="post" action="{{ url_for('delete_note', note_id=note.id) }}"
+          data-confirm="Delete this note? This cannot be undone.">
+      <button class="btn btn--danger" type="submit">Delete</button>
+    </form>
+  </div>
+  {% else %}
+  <p class="note-foreign">You are viewing a note owned by <strong>{{ owner }}</strong>.</p>
+  {% endif %}
+</div>
+{% endblock %}

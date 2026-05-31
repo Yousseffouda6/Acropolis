@@ -1,0 +1,39 @@
+{% extends "shell.html" %}
+{% block title %}{{ 'Edit note' if mode == 'edit' else 'New note' }} - Acropolis Notes{% endblock %}
+
+{% block main %}
+<div class="note-view">
+  <a class="link-back" href="{{ url_for('view_note', note_id=note.id) if mode == 'edit' else url_for('dashboard') }}">&larr; Cancel</a>
+
+  <header class="page-head">
+    <h1 class="page-head__title">{{ 'Edit note' if mode == 'edit' else 'New note' }}</h1>
+  </header>
+
+  <form method="post"
+        action="{{ url_for('edit_note', note_id=note.id) if mode == 'edit' else url_for('new_note') }}"
+        class="card form form--note" novalidate>
+    <label class="field">
+      <span class="field__label">Title</span>
+      <input class="input" type="text" name="title" value="{{ note.title }}"
+             placeholder="A short, clear title" autofocus required>
+    </label>
+
+    <label class="field">
+      <span class="field__label">Tags <span class="field__hint">comma-separated</span></span>
+      <input class="input" type="text" name="tags" value="{{ note.tags }}"
+             placeholder="work, ideas, personal">
+    </label>
+
+    <label class="field">
+      <span class="field__label">Body <span class="field__hint">Markdown supported</span></span>
+      <textarea class="input textarea" name="body" rows="14"
+                placeholder="# Write your note&#10;&#10;Use **Markdown** for headings, lists and `code`.">{{ note.body }}</textarea>
+    </label>
+
+    <div class="form__actions">
+      <a class="btn btn--ghost" href="{{ url_for('view_note', note_id=note.id) if mode == 'edit' else url_for('dashboard') }}">Cancel</a>
+      <button class="btn btn--primary" type="submit">{{ 'Save changes' if mode == 'edit' else 'Create note' }}</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
