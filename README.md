@@ -73,7 +73,7 @@ acropolis/
 Phase 0 establishes this repository and design. Subsequent phases are sequenced so each builds on the last and closes a loop.
 
 - [x] **Phase 0 — Foundation & design.** Repository, architecture, and roadmap established. Toolchain confirmed (Docker on host, Kali VM as attacker).
-- [ ] **Phase 1 — Vulnerable application (AppSec).** Build the app with planted flaws; containerize; stand up Juice Shop as a secondary target.
+- [x] **Phase 1 — Vulnerable application (AppSec).** Built **Acropolis Notes**, a complete Flask notes app with six planted flaws (SQLi, IDOR, insecure deserialization, hardcoded secrets, vulnerable dependency, stored XSS); containerized; exploit regression suite passing 6/6. See below.
 - [ ] **Phase 2 — Security pipeline (DevSecOps).** GitHub Actions running SAST, SCA, secret, and container-image scans; fail the build on high-severity findings.
 - [ ] **Phase 3 — Cloud deployment (Cloud Security).** Deploy to a free-tier ARM instance; least-privilege IAM and network rules; one deliberate misconfiguration.
 - [ ] **Phase 4 — SIEM (Blue Team).** Deploy Wazuh; ship host and network telemetry; build dashboards.
@@ -81,6 +81,22 @@ Phase 0 establishes this repository and design. Subsequent phases are sequenced 
 - [ ] **Phase 6 — AI/LLM security.** Add a model-backed feature; red-team against the OWASP LLM Top 10; implement guardrails.
 - [ ] **Phase 7 — Post-quantum cryptography.** Implement an ML-KEM hybrid key exchange via Open Quantum Safe; document the link to IBM's FIPS 203 contribution.
 - [ ] **Phase 8 — Remediation & publication.** Fix every planted flaw, verify the pipeline goes green and alerts go quiet, record a short demo, publish per-phase writeups.
+
+---
+
+## Phase 1 — Acropolis Notes (Application Security)
+
+The Phase 1 deliverable is **Acropolis Notes**, a server-rendered Flask + SQLite Markdown notes app that doubles as the lab's vulnerable target — a complete, polished product on the surface with deliberately planted flaws underneath. It lives in [`app/`](./app); the full walkthrough is in [`writeups/phase-1-appsec.md`](./writeups/phase-1-appsec.md).
+
+**Product features:** account register / login / logout · Markdown notes with create / view / edit / delete · tags and tag filtering · live client-side search · dashboard with per-account stats and empty states · YAML import / export · settings & profile · a custom, responsive UI (no framework).
+
+**Planted vulnerabilities (by design):** hardcoded secrets · SQL injection (login) · IDOR · insecure YAML deserialization (RCE) · known-vulnerable dependency · stored XSS — plus the bonus flaws `debug=True` and plaintext passwords. An exploit regression suite (`app/test_exploits.py`) asserts all six are still exploitable (**6/6 passing**).
+
+> ⚠️ Acropolis Notes **intentionally** contains planted secrets and exploitable vulnerabilities for security education. Do not deploy it publicly, and do not store real data in it.
+
+| Landing | Dashboard | Note view |
+| --- | --- | --- |
+| [![Landing page](docs/screenshots/landing.png)](docs/screenshots/landing.png) | [![Dashboard](docs/screenshots/dashboard.png)](docs/screenshots/dashboard.png) | [![Note view](docs/screenshots/note.png)](docs/screenshots/note.png) |
 
 ---
 
