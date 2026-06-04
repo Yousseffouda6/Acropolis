@@ -1,0 +1,140 @@
+# Acropolis DevSecOps pipeline (Phase 2)
+# ----------------------------------------------------------------------------
+# DESIGN DECISION — REPORT, DON'T BLOCK (yet).
+# Acropolis Notes is vulnerable *by design*: Phase 1 planted six flaws on purpose
+# and they must stay exploitable so later phases can attack and detect the SAME
+# artifact. The job of this pipeline is therefore to PROVE that the scanners SEE
+# those flaws — not to fail the build on them. Every scanning job runs with
+# `continue-on-error: true` and the scan steps swallow non-zero exits (`|| true`),
+# so the pipeline stays green while findings still surface in the Security tab
+# (SARIF) and as build artifacts (the ZAP report).
+#
+# Phase 8 (remediation) flips this: once the planted flaws are fixed, drop the
+# `continue-on-error` / `|| true` and add failing severity thresholds so the gate
+# becomes BLOCKING — any *re-introduced* vulnerability then breaks CI. The report
+# -> gate progression is the whole point of the exercise.
+# ----------------------------------------------------------------------------
+
+name: security
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  # 1) SAST — static analysis of the source for dangerous code patterns.
+  sast:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Semgrep
+        run: pip install semgrep
+      - name: Run Semgrep (SARIF)
+        run: semgrep scan --config=auto --sarif --output=semgrep.sarif app/ || true
+      - name: Upload Semgrep SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+  # 2) Secret scanning — gitleaks, over the FULL history (fetch-depth: 0) so a
+  #    committed secret is caught even if a later commit removed it.
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # 3) SCA — software composition analysis. Trivy scans the dependency manifest
+  #    (catches requests==2.19.1 + its outdated transitive deps) and then the
+  #    built container image (base-image CVEs).
+  sca:
+    name: SCA (Trivy)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy filesystem scan (dependencies)
+        uses: aquasecurity/trivy-action@0.28.0
+        continue-on-error: true
+        with:
+          scan-type: fs
+          scan-ref: app
+          format: sarif
+          output: trivy-deps.sarif
+          severity: MEDIUM,HIGH,CRITICAL
+      - name: Upload Trivy SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-deps.sarif
+          category: trivy-deps
+      - name: Build image
+        run: docker build -t acropolis-notes ./app
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@0.28.0
+        continue-on-error: true
+        with:
+          scan-type: image
+          image-ref: acropolis-notes
+          format: table
+          severity: HIGH,CRITICAL
+
+  # 4) DAST — dynamic analysis. Build + run the app, wait until it answers, then
+  #    point the OWASP ZAP baseline (passive, UNAUTHENTICATED) scan at it.
+  #    NOTE on networking: ZAP runs in its own container, so it must share the
+  #    runner's network (--network host) to reach the app on localhost:5000.
+  dast:
+    name: DAST (OWASP ZAP baseline)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t acropolis-notes ./app
+      - name: Start app
+        run: docker run -d --name acro -p 5000:5000 acropolis-notes
+      - name: Wait for the app to answer
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:5000/login >/dev/null; then
+              echo "app is up after ${i} tries"
+              exit 0
+            fi
+            echo "waiting for app... (${i}/30)"
+            sleep 2
+          done
+          echo "::error::app did not become ready in time"
+          docker logs acro || true
+          exit 1
+      - name: ZAP baseline scan
+        if: always()
+        run: |
+          docker run --network host -v "${{ github.workspace }}:/zap/wrk/:rw" \
+            ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://localhost:5000 \
+            -r zap-report.html || true
+      - name: Upload ZAP report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: zap-report.html
+          if-no-files-found: warn
