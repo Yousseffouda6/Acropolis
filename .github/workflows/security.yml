@@ -125,16 +125,19 @@ jobs:
           echo "::error::app did not become ready in time"
           docker logs acro || true
           exit 1
+      - name: Prepare ZAP output directory (world-writable; ZAP runs as non-root)
+        if: always()
+        run: mkdir -p zap-out && chmod 777 zap-out
       - name: ZAP baseline scan
         if: always()
         run: |
-          docker run --network host -v "${{ github.workspace }}:/zap/wrk/:rw" \
-            ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://localhost:5000 \
-            -r zap-report.html || true
+          docker run --network host -v "${{ github.workspace }}/zap-out:/zap/wrk/:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t http://localhost:5000 -r zap-report.html -I || true
       - name: Upload ZAP report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: zap-report
-          path: zap-report.html
+          path: zap-out/zap-report.html
           if-no-files-found: warn
