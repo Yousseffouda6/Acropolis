@@ -74,7 +74,7 @@ Phase 0 establishes this repository and design. Subsequent phases are sequenced 
 
 - [x] **Phase 0 — Foundation & design.** Repository, architecture, and roadmap established. Toolchain confirmed (Docker on host, Kali VM as attacker).
 - [x] **Phase 1 — Vulnerable application (AppSec).** Built **Acropolis Notes**, a complete Flask notes app with six planted flaws (SQLi, IDOR, insecure deserialization, hardcoded secrets, vulnerable dependency, stored XSS); containerized; exploit regression suite passing 6/6. See below.
-- [ ] **Phase 2 — Security pipeline (DevSecOps).** GitHub Actions running SAST, SCA, secret, and container-image scans; fail the build on high-severity findings.
+- [x] **Phase 2 — Security pipeline (DevSecOps).** GitHub Actions running SAST (Semgrep), SCA + image (Trivy), secret (gitleaks) and DAST (OWASP ZAP) scans on every commit; findings reported to the Security tab (blocking gate deferred to Phase 8). See below.
 - [ ] **Phase 3 — Cloud deployment (Cloud Security).** Deploy to a free-tier ARM instance; least-privilege IAM and network rules; one deliberate misconfiguration.
 - [ ] **Phase 4 — SIEM (Blue Team).** Deploy Wazuh; ship host and network telemetry; build dashboards.
 - [ ] **Phase 5 — Attack & detect (Offensive + Blue Team loop).** Exploit from Kali, then hunt the attack in Wazuh and write detection rules for the blind spots.
@@ -97,6 +97,21 @@ The Phase 1 deliverable is **Acropolis Notes**, a server-rendered Flask + SQLite
 | Landing | Dashboard | Note view |
 | --- | --- | --- |
 | [![Landing page](docs/screenshots/landing.png)](docs/screenshots/landing.png) | [![Dashboard](docs/screenshots/dashboard.png)](docs/screenshots/dashboard.png) | [![Note view](docs/screenshots/note.png)](docs/screenshots/note.png) |
+
+---
+
+## Phase 2 — Security pipeline (DevSecOps)
+
+Every push and pull request runs the [`security`](./.github/workflows/security.yml) GitHub Actions workflow — four scanner classes, each aimed at a different failure mode of the app:
+
+- **SAST** — Semgrep statically analyses `app/` for dangerous code patterns (the SQLi, the unsafe `yaml.load`, the hardcoded secret, `debug=True`).
+- **Secret scanning** — gitleaks scans the **full git history** for committed keys, so a secret is found even after a later commit "removes" it.
+- **SCA** — Trivy scans `requirements.txt` and the built container image for known-vulnerable dependencies and base-image CVEs.
+- **DAST** — the OWASP ZAP baseline scan probes the running container.
+
+Because the app is vulnerable *by design*, the pipeline **reports** rather than **blocks**: every job is `continue-on-error`, so CI stays green while the findings still surface (blocking is deferred to Phase 8). Results land in the repo's **Security** tab (SARIF, from Semgrep + Trivy) and as a downloadable **`zap-report.html`** artifact on each Actions run.
+
+The headline finding: the **IDOR is caught by no automated scanner** — it is missing access-control logic, not a dangerous code pattern — which is exactly why OWASP ranks Broken Access Control the #1 web risk. Full catch/miss matrix in [`writeups/phase-2-devsecops.md`](./writeups/phase-2-devsecops.md).
 
 ---
 
