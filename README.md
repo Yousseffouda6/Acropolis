@@ -75,7 +75,7 @@ Phase 0 establishes this repository and design. Subsequent phases are sequenced 
 - [x] **Phase 0 — Foundation & design.** Repository, architecture, and roadmap established. Toolchain confirmed (Docker on host, Kali VM as attacker).
 - [x] **Phase 1 — Vulnerable application (AppSec).** Built **Acropolis Notes**, a complete Flask notes app with six planted flaws (SQLi, IDOR, insecure deserialization, hardcoded secrets, vulnerable dependency, stored XSS); containerized; exploit regression suite passing 6/6. See below.
 - [x] **Phase 2 — Security pipeline (DevSecOps).** GitHub Actions running SAST (Semgrep), SCA + image (Trivy), secret (gitleaks) and DAST (OWASP ZAP) scans on every commit; findings reported to the Security tab (blocking gate deferred to Phase 8). See below.
-- [ ] **Phase 3 — Cloud deployment (Cloud Security).** Deploy to a free-tier ARM instance; least-privilege IAM and network rules; one deliberate misconfiguration.
+- [x] **Phase 3 — Cloud deployment (Cloud Security).** Deployed the containerized app to an AWS EC2 free-tier instance (`eu-central-1`) under a least-privilege security group (SSH from one IP), with the container bound to loopback, key-only SSH, and access via an SSH tunnel — **deliberately not exposed** to the public internet. See below.
 - [ ] **Phase 4 — SIEM (Blue Team).** Deploy Wazuh; ship host and network telemetry; build dashboards.
 - [ ] **Phase 5 — Attack & detect (Offensive + Blue Team loop).** Exploit from Kali, then hunt the attack in Wazuh and write detection rules for the blind spots.
 - [ ] **Phase 6 — AI/LLM security.** Add a model-backed feature; red-team against the OWASP LLM Top 10; implement guardrails.
@@ -112,6 +112,21 @@ Every push and pull request runs the [`security`](./.github/workflows/security.y
 Because the app is vulnerable *by design*, the pipeline **reports** rather than **blocks**: every job is `continue-on-error`, so CI stays green while the findings still surface (blocking is deferred to Phase 8). Results land in the repo's **Security** tab (SARIF, from Semgrep + Trivy) and as a downloadable **`zap-report.html`** artifact on each Actions run.
 
 The headline finding: the **IDOR is caught by no automated scanner** — it is missing access-control logic, not a dangerous code pattern — which is exactly why OWASP ranks Broken Access Control the #1 web risk. Full catch/miss matrix in [`writeups/phase-2-devsecops.md`](./writeups/phase-2-devsecops.md).
+
+---
+
+## Phase 3 — Cloud deployment (Cloud Security)
+
+Acropolis Notes now runs on a real cloud host — an AWS EC2 `t3.micro` (free tier, Ubuntu 26.04, `eu-central-1`) — so Phases 4–5 have a live target. The defining choice is what is **not** done: the vulnerable app is **never exposed to the public internet**.
+
+Because the app has effectively unauthenticated RCE by design, an open box would be compromised within minutes. So the deployment uses defense in depth — each layer independently enough to keep it off the internet:
+
+- **Security group** — one inbound rule: SSH/22 from the operator's IP only; port 5000 is never opened.
+- **Loopback binding** — the container is published to `127.0.0.1:5000` (not `0.0.0.0`), so nothing listens on the public interface even if the firewall were wrong.
+- **Key-only SSH, non-root user** — login is the `ubuntu` user by SSH key; password auth is off.
+- **SSH-tunnel access** — the app is reached only via `ssh -L 5000:localhost:5000`, so reaching it needs both the key and the allowed source IP.
+
+This host becomes the monitored target in Phase 4 (SIEM) and the attack target in Phase 5, reached through that controlled channel rather than public exposure. A redeploy is one idempotent command ([`infra/deploy.sh`](./infra/deploy.sh)); the runbook is [`infra/deploy.md`](./infra/deploy.md) and the full security-model writeup is [`writeups/phase-3-cloud.md`](./writeups/phase-3-cloud.md).
 
 ---
 
