@@ -1,10 +1,12 @@
 # Secrets & environment
 .env
 .env.*
-*.pem
-*.key
 secrets/
 credentials*
+
+# SSH keys & TLS certs — never commit a private key (e.g. EC2 access key, Phase 3)
+*.pem
+*.key
 
 # Python
 __pycache__/
