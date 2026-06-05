@@ -209,7 +209,10 @@ With the agent active and shipping telemetry to a manager the target can't reach
 
 That catch/miss loop is the point of the whole lab: a vulnerability in the app
 becomes an attack from Kali becomes an alert (or a silence) in Wazuh, and the
-silences become new rules.
+silences become new rules. Phase 5 ran exactly that experiment — and its headline
+is a warning about this very setup: the agent's host rules caught the loud attacks,
+but a successful, body-borne SQLi login bypass slipped past proxy-log-based web
+detection entirely. See [`phase-5-attack-detect.md`](./phase-5-attack-detect.md).
 
 ---
 
@@ -223,4 +226,4 @@ silences become new rules.
 - [x] Agent ports `1514`/`1515` opened **only** to the Acropolis host's private IP `/32`, inside the VPC.
 - [x] Wazuh agent installed on the Acropolis host, pointed at the manager's **private** IP, and active.
 - [x] Agent detection surface live: FIM (`syscheckd`), log collection (`logcollector`), vuln/config (`modulesd`), active response (`execd`).
-- [ ] **Phase 5:** attack Acropolis Notes from Kali, hunt the footprints here, and write custom rules for what the defaults missed.
+- [x] **Phase 5:** attacked Acropolis Notes from Kali and hunted the footprints here — the noisy scans lit up, the successful SQLi login bypass did not. See [`phase-5-attack-detect.md`](./phase-5-attack-detect.md).
