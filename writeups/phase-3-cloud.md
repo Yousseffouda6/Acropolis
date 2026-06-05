@@ -23,6 +23,7 @@ security model.
 | Network | Security group: inbound **TCP 22 from the operator's IP only**; 5000 never opened |
 | Identity | Non-root `ubuntu` user with sudo; **SSH key only**, password auth off |
 | Access | An SSH local port-forward (`ssh -L 5000:localhost:5000`) — the only path in |
+| Cost | AWS **Free Plan** (a hard credit cap, not just a warning) + a billing **budget alert**; `t3.micro` + small EBS stays inside the free tier |
 
 ---
 
@@ -100,6 +101,28 @@ contained to this one disposable VM.
 
 ---
 
+## Cost control: a hard cap, not just a warning
+
+A vulnerable box that runs 24/7 is also a *billing* risk — a compromise can spin
+up resources, and even honest mistakes (an oversized instance, a forgotten volume)
+quietly accrue. Two controls keep the lab cheap and bounded, in the same
+least-privilege spirit as the network model:
+
+- **AWS Free Plan as a hard cap.** The account runs on the AWS Free Plan, which
+  *caps* spend rather than merely tracking it: when the free credits are exhausted,
+  paid usage is blocked instead of silently billed. That turns "I forgot to tear it
+  down" from a surprise invoice into a stopped resource.
+- **A billing budget alert.** A budget is configured to email at a low threshold,
+  so any unexpected cost — a runaway resource, a misconfiguration — surfaces
+  immediately rather than at month-end.
+- **Right-sized, free-tier resources.** The host is a `t3.micro` on a small EBS
+  volume, both inside the free tier, so steady-state cost is effectively zero; the
+  cap and the alert only ever matter if something goes wrong.
+
+Least privilege bounds the lab's blast radius not just in *access* but in *spend*.
+
+---
+
 ## Why a controlled channel, not a public port
 
 Phase 5 will attack this host, and Phase 4 will watch it. Both happen over the
@@ -143,5 +166,6 @@ as built in Phase 1, which is the point: Phases 4 and 5 act on the *same* artifa
 - [x] Container runs bound to `127.0.0.1:5000` with `--restart unless-stopped`.
 - [x] Access only via SSH local port-forward; key-only SSH; non-root `ubuntu` user.
 - [x] Idempotent redeploy (`infra/deploy.sh`) + runbook (`infra/deploy.md`); no key/IP/secret committed.
-- [ ] **Phase 4:** install the Wazuh agent on this host; ship host + container telemetry.
-- [ ] **Phase 5:** attack the target over the controlled channel, then detect the footprints.
+- [x] Cost bounded by the AWS Free Plan (hard cap) plus a billing budget alert; free-tier `t3.micro` + small EBS.
+- [x] **Phase 4:** Wazuh agent installed on this host, shipping host + container telemetry — see [`phase-4-blueteam.md`](./phase-4-blueteam.md).
+- [x] **Phase 5:** attacked over the controlled channel and the footprints hunted in Wazuh — see [`phase-5-attack-detect.md`](./phase-5-attack-detect.md).
