@@ -77,7 +77,7 @@ Phase 0 establishes this repository and design. Subsequent phases are sequenced 
 - [x] **Phase 2 — Security pipeline (DevSecOps).** GitHub Actions running SAST (Semgrep), SCA + image (Trivy), secret (gitleaks) and DAST (OWASP ZAP) scans on every commit; findings reported to the Security tab (blocking gate deferred to Phase 8). See below.
 - [x] **Phase 3 — Cloud deployment (Cloud Security).** Deployed the containerized app to an AWS EC2 free-tier instance (`eu-central-1`) under a least-privilege security group (SSH from one IP), with the container bound to loopback, key-only SSH, and access via an SSH tunnel — **deliberately not exposed** to the public internet. See below.
 - [x] **Phase 4 — SIEM (Blue Team).** Deployed a dedicated **Wazuh** SIEM on its own EC2 instance — separate from the monitored host — with a Wazuh agent on the Acropolis box shipping host telemetry to the manager over the VPC's private network; dashboard and agent ports kept off the public internet. See below.
-- [ ] **Phase 5 — Attack & detect (Offensive + Blue Team loop).** Exploit from Kali, then hunt the attack in Wazuh and write detection rules for the blind spots.
+- [x] **Phase 5 — Attack & detect (Offensive + Blue Team loop).** Attacked the live host from Kali across three vectors (SSH brute force, post-compromise host actions, web-layer attacks) and hunted each in Wazuh — surfacing the lab's sharpest lesson: a noisy scan raised ~7,000 alerts while a successful SQLi login bypass raised zero. See below.
 - [ ] **Phase 6 — AI/LLM security.** Add a model-backed feature; red-team against the OWASP LLM Top 10; implement guardrails.
 - [ ] **Phase 7 — Post-quantum cryptography.** Implement an ML-KEM hybrid key exchange via Open Quantum Safe; document the link to IBM's FIPS 203 contribution.
 - [ ] **Phase 8 — Remediation & publication.** Fix every planted flaw, verify the pipeline goes green and alerts go quiet, record a short demo, publish per-phase writeups.
@@ -140,6 +140,18 @@ Phase 3 left a live, locked-down target; Phase 4 gives it a watcher. A dedicated
 - **Nothing public, again.** The dashboard (443) is reached only via an SSH tunnel (`-L 8443:localhost:443`); the agent ports (1514/1515) are scoped to the target's private IP only — the same defense-in-depth rule as Phase 3.
 
 This is the defensive instrument Phase 5 will exercise: attack Acropolis Notes from Kali, then hunt the footprints here and write detection rules for the blind spots. The runbook is [`detection/wazuh-deployment.md`](./detection/wazuh-deployment.md); the full architecture and security-model writeup is [`writeups/phase-4-blueteam.md`](./writeups/phase-4-blueteam.md).
+
+---
+
+## Phase 5 — Attack & detect (Offensive + Blue Team loop)
+
+This is where the loop closes. From a Kali VM, the live Acropolis host (Phase 3) is attacked across three vectors; from the Wazuh SIEM (Phase 4), each attack is hunted. All testing is against the author's own lab, over the controlled channel.
+
+- **SSH brute force** (hydra) → caught loudly: an auth-failure burst, Wazuh rule **5712**, then the successful-login pivot **5715** (MITRE **T1110 → T1078**).
+- **Post-compromise host actions** → new user (**5902** / T1136), sudo-to-root (**5402**), and real-time **File Integrity Monitoring** (rule **550** with `report_changes`) surfacing the exact line an attacker added to a file.
+- **Web-layer attacks** via an nginx reverse proxy (port 80 to the attacker only) → a nikto scan plus GET-based SQLi/XSS/path-traversal triggered ~**7,000** alerts (**31101/31103/31105/31106**).
+
+**The headline finding inverts the intuition.** The *real* attack — the planted POST SQLi login bypass (`' OR '1'='1' --`) — **succeeded** (302, valid session, account takeover) and raised **zero** alerts, because nginx access logs record the URL but never the request body. A useless noisy scan = ~7,000 alerts; a full account takeover = 0: **detection was inversely correlated with danger.** Worse, the session is signed with the hardcoded `SECRET_KEY` (VULN #1), so sessions are forgeable offline. The full engagement, the caught-vs-missed table, and remediation options are in [`writeups/phase-5-attack-detect.md`](./writeups/phase-5-attack-detect.md).
 
 ---
 
