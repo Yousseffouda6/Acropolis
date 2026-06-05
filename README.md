@@ -76,7 +76,7 @@ Phase 0 establishes this repository and design. Subsequent phases are sequenced 
 - [x] **Phase 1 — Vulnerable application (AppSec).** Built **Acropolis Notes**, a complete Flask notes app with six planted flaws (SQLi, IDOR, insecure deserialization, hardcoded secrets, vulnerable dependency, stored XSS); containerized; exploit regression suite passing 6/6. See below.
 - [x] **Phase 2 — Security pipeline (DevSecOps).** GitHub Actions running SAST (Semgrep), SCA + image (Trivy), secret (gitleaks) and DAST (OWASP ZAP) scans on every commit; findings reported to the Security tab (blocking gate deferred to Phase 8). See below.
 - [x] **Phase 3 — Cloud deployment (Cloud Security).** Deployed the containerized app to an AWS EC2 free-tier instance (`eu-central-1`) under a least-privilege security group (SSH from one IP), with the container bound to loopback, key-only SSH, and access via an SSH tunnel — **deliberately not exposed** to the public internet. See below.
-- [ ] **Phase 4 — SIEM (Blue Team).** Deploy Wazuh; ship host and network telemetry; build dashboards.
+- [x] **Phase 4 — SIEM (Blue Team).** Deployed a dedicated **Wazuh** SIEM on its own EC2 instance — separate from the monitored host — with a Wazuh agent on the Acropolis box shipping host telemetry to the manager over the VPC's private network; dashboard and agent ports kept off the public internet. See below.
 - [ ] **Phase 5 — Attack & detect (Offensive + Blue Team loop).** Exploit from Kali, then hunt the attack in Wazuh and write detection rules for the blind spots.
 - [ ] **Phase 6 — AI/LLM security.** Add a model-backed feature; red-team against the OWASP LLM Top 10; implement guardrails.
 - [ ] **Phase 7 — Post-quantum cryptography.** Implement an ML-KEM hybrid key exchange via Open Quantum Safe; document the link to IBM's FIPS 203 contribution.
@@ -127,6 +127,19 @@ Because the app has effectively unauthenticated RCE by design, an open box would
 - **SSH-tunnel access** — the app is reached only via `ssh -L 5000:localhost:5000`, so reaching it needs both the key and the allowed source IP.
 
 This host becomes the monitored target in Phase 4 (SIEM) and the attack target in Phase 5, reached through that controlled channel rather than public exposure. A redeploy is one idempotent command ([`infra/deploy.sh`](./infra/deploy.sh)); the runbook is [`infra/deploy.md`](./infra/deploy.md) and the full security-model writeup is [`writeups/phase-3-cloud.md`](./writeups/phase-3-cloud.md).
+
+---
+
+## Phase 4 — Blue Team / SIEM
+
+Phase 3 left a live, locked-down target; Phase 4 gives it a watcher. A dedicated **Wazuh** SIEM runs on its **own** EC2 instance (`m7i-flex.large`, 8 GB) — deliberately *not* on the Acropolis host — so a compromise of the vulnerable app cannot reach the logs that recorded it. Watcher and watched, kept apart:
+
+- **Separate box, same VPC.** The SIEM sits in the same VPC as the target but a different Availability Zone; the agent ships events *off* the host as they happen, beyond an attacker's reach even if they pop the box.
+- **Three Wazuh components** (Docker Compose, pinned to `v4.14.5`): the **manager** (analysis + correlation), the **indexer** (OpenSearch storage + search), and the **dashboard** (web UI).
+- **Agent on the target.** A Wazuh agent on the Acropolis host performs file-integrity monitoring, log collection, vulnerability/config assessment, and active response — pointed at the manager's **private** IP, so agent↔manager traffic never leaves the VPC.
+- **Nothing public, again.** The dashboard (443) is reached only via an SSH tunnel (`-L 8443:localhost:443`); the agent ports (1514/1515) are scoped to the target's private IP only — the same defense-in-depth rule as Phase 3.
+
+This is the defensive instrument Phase 5 will exercise: attack Acropolis Notes from Kali, then hunt the footprints here and write detection rules for the blind spots. The runbook is [`detection/wazuh-deployment.md`](./detection/wazuh-deployment.md); the full architecture and security-model writeup is [`writeups/phase-4-blueteam.md`](./writeups/phase-4-blueteam.md).
 
 ---
 
