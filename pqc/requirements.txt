@@ -1,0 +1,13 @@
+# Acropolis — Phase 7 post-quantum cryptography demo dependencies.
+#
+# liboqs-python exposes the `oqs` module (ML-KEM / ML-DSA via the Open Quantum
+# Safe project). On first import it builds/loads the liboqs C library, so a C
+# toolchain (cmake + a C compiler) must be on PATH. If the PyPI install below is
+# unavailable for your platform, install from source instead:
+#     git clone --depth 1 https://github.com/open-quantum-safe/liboqs-python
+#     pip install ./liboqs-python
+liboqs-python>=0.10.0
+
+# Classical RSA-3072 baseline — used only to measure a serialized public-key
+# size for the post-quantum vs classical comparison table.
+cryptography>=42.0
