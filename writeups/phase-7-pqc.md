@@ -185,14 +185,46 @@ Phases 1–5 and classify each use of crypto by primitive and quantum exposure.
 | Component | Where it lives | Primitive | Quantum status | Action |
 | --- | --- | --- | --- | --- |
 | **Session cookie signing** | Flask `SECRET_KEY` → `itsdangerous` HMAC (Phase 1) | **HMAC-SHA — symmetric** | **Quantum-safe** (only Grover applies; HMAC is unaffected in practice) | None *for quantum*. But it is still **VULN #1** — the key is hardcoded in source, so sessions are forgeable offline today. Move it to a secret manager and rotate. |
-| **nginx TLS** (front door) | reverse proxy added in Phase 5 | **RSA / ECDHE** key exchange | **Quantum-VULNERABLE** (Shor) | Migrate to **hybrid X25519MLKEM768** on OpenSSL 3.5+ / a PQC-aware nginx. |
+| **nginx TLS** (front door) | reverse proxy added in Phase 5 | **hybrid X25519MLKEM768** (X25519 + ML-KEM-768) | **✅ Migrated to hybrid PQC** (TLS 1.3, OpenSSL 3.5.5) | **Done** — `ssl_ecdh_curve X25519MLKEM768:X25519`, verified on the wire (see *Migration performed* below). |
 | **SSH access** | host + user keys (Phase 3) | **Ed25519 / RSA** | **Quantum-VULNERABLE** (Shor) | Adopt a PQC/hybrid SSH KEX (`mlkem768x25519-sha256` / `sntrup761x25519`). |
 | **Wazuh dashboard TLS** | SIEM dashboard + indexer (Phase 4) | **RSA / ECDHE** TLS | **Quantum-VULNERABLE** (Shor) | Hybrid PQC TLS once the OpenSearch/dashboard stack supports it. |
 
 The inventory makes the Shor/Grover split concrete: the **one symmetric** use in
 the lab (the session HMAC) is quantum-safe — its problem is a *classical* planted
-flaw, not a quantum one — while **every TLS/SSH handshake** in the lab relies on
-asymmetric key exchange and is squarely in Shor's path.
+flaw, not a quantum one — while the **TLS/SSH handshakes** all rest on asymmetric
+key exchange and sit squarely in Shor's path. The nginx front door has **already
+been moved** off that path to hybrid PQC (next section); SSH and the Wazuh dashboard
+are the remaining classical surfaces.
+
+---
+
+## Migration performed — hybrid PQC on the nginx front door
+
+The inventory's highest-priority asymmetric surface is no longer just *planned* — it
+is **done**. The Phase 5 nginx reverse proxy now terminates **HTTPS / TLS 1.3** and
+negotiates a **hybrid post-quantum key exchange**:
+
+- **HTTPS / TLS 1.3 on nginx**, with a self-signed certificate (a lab cert; a real
+  deployment would use an ACME/CA-issued one).
+- **`ssl_ecdh_curve X25519MLKEM768:X25519`.** The key-exchange group list leads with
+  **X25519MLKEM768** — the hybrid that runs a classical **X25519** exchange concatenated
+  with **ML-KEM-768** — and falls back to classical **X25519** for clients that don't
+  support it, so the change is non-breaking.
+- **Verified on the wire:** `openssl s_client -connect localhost:443 -groups X25519MLKEM768`
+  reports **`Negotiated TLS1.3 group: X25519MLKEM768`** — confirming the handshake
+  *actually used* the hybrid group, not merely that the server offered it.
+- **Why it works here:** the box runs **OpenSSL 3.5.5**, which has **native ML-KEM
+  support** — hybrid X25519MLKEM768 is built in, with no external provider
+  (oqs-provider) required.
+
+The result is exactly the hedge described earlier: the connection stays secure if
+**either** half holds — classical X25519 covers the risk of a young ML-KEM
+implementation, and ML-KEM-768 covers the quantum threat to X25519. The negotiated
+secret still only ever keys a symmetric cipher (AES-256-GCM).
+
+**Still classical (not yet migrated):** the **SSH access keys** (host + user, Phase 3)
+and the **Wazuh dashboard TLS** (Phase 4) remain on classical asymmetric key exchange —
+the next two surfaces on the list.
 
 ---
 
@@ -204,9 +236,10 @@ asymmetric key exchange and is squarely in Shor's path.
 2. **Prioritise by confidentiality lifetime.** Long-lived secrets first, because of
    harvest-now-decrypt-later. **Key exchange before signatures** — confidentiality
    is the part exposed retroactively.
-3. **Adopt hybrid PQC TLS.** Put **X25519MLKEM768** on the nginx front door and the
-   Wazuh dashboard; enable a hybrid SSH KEX. Hybrid (not pure PQC) hedges against
-   both an immature PQC implementation and the quantum break of the classical half.
+3. **Adopt hybrid PQC TLS.** Put **X25519MLKEM768** on the nginx front door
+   (**done** — see *Migration performed*) and the Wazuh dashboard; enable a hybrid SSH
+   KEX. Hybrid (not pure PQC) hedges against both an immature PQC implementation and the
+   quantum break of the classical half.
 4. **Plan signature migration.** Lower urgency (no retroactive forgery), but track
    ML-DSA support for long-lived trust anchors — CA roots, any code/firmware
    signing.
@@ -226,4 +259,5 @@ asymmetric key exchange and is squarely in Shor's path.
 - [x] Documented the threat model: **Shor** breaks all asymmetric (RSA/ECC), **Grover** only halves symmetric (AES-256 stays safe); **harvest-now-decrypt-later** makes confidentiality migration urgent today.
 - [x] **Crypto inventory** of Acropolis: session `SECRET_KEY` (symmetric → quantum-safe, but a hardcoded classical flaw); nginx / SSH / Wazuh TLS (asymmetric → quantum-vulnerable → hybrid).
 - [x] Migration roadmap recorded: inventory → prioritise long-lived secrets → hybrid PQC TLS → crypto-agility.
-- [ ] **Future:** stand up a working **hybrid X25519MLKEM768** listener on the nginx front door as a live migration demo, and capture the larger handshake on the wire.
+- [x] **Migration performed:** nginx front door moved to **hybrid X25519MLKEM768** (TLS 1.3, OpenSSL 3.5.5); verified on the wire — `openssl s_client … -groups X25519MLKEM768` reported `Negotiated TLS1.3 group: X25519MLKEM768`.
+- [ ] **Future:** migrate the remaining classical surfaces — **SSH access keys** and the **Wazuh dashboard TLS** — to hybrid PQC.
