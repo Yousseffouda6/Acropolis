@@ -31,6 +31,7 @@ from functools import wraps
 
 import markdown
 import yaml
+from dotenv import load_dotenv
 from flask import (
     Flask,
     Response,
@@ -44,6 +45,12 @@ from flask import (
 )
 
 from db import get_connection
+
+# Load a local .env (gitignored) so secrets like GEMINI_API_KEY are available
+# without exporting them in every shell. Real environment variables and Docker
+# ``--env-file`` values take precedence (override defaults to False), and a
+# missing .env is simply ignored - which is the norm in Docker and on the cloud.
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
 # --- VULN #1: hardcoded secrets committed straight into source -------------
 SECRET_KEY = "acropolis-dev-secret-key-2026-do-not-rotate"

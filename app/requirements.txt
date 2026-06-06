@@ -12,6 +12,7 @@ blinker==1.8.2
 # Feature libraries
 PyYAML==6.0.2          # YAML import/export (VULN #4 sink uses the unsafe loader)
 Markdown==3.6          # Markdown -> HTML rendering (rendered unsafely, VULN #6)
+python-dotenv==1.0.1   # load GEMINI_API_KEY (Phase 6 AI) from a local .env
 
 # VULN #5: a knowingly outdated dependency kept for the SCA scanner to flag.
 # It is intentionally NOT imported anywhere at runtime.
