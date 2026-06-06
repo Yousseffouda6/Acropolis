@@ -11,13 +11,31 @@
 <section class="card settings-card">
   <h2 class="settings-card__title">AI is not configured</h2>
   <p class="settings-card__hint">
-    The AI Assistant is unavailable because no Gemini API key is set. Set the
-    <code>GEMINI_API_KEY</code> environment variable and restart the app to enable it.
+    The AI Assistant is unavailable because no API key is configured. Add
+    <code>GEMINI_API_KEY</code> to <code>app/.env</code> and restart the app to enable it.
+    The Ollama backend needs no key but requires the Ollama app to be running locally.
   </p>
 </section>
 {% else %}
 <section class="card settings-card">
   <form method="post" action="{{ url_for('ai_assistant') }}" class="form">
+    <fieldset class="field" style="border:none;padding:0;margin:0 0 1rem 0;">
+      <legend class="field__label" style="margin-bottom:.6rem;">Backend</legend>
+      <div style="display:flex;gap:2rem;">
+        <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;">
+          <input type="radio" name="backend" value="gemini"
+                 {% if backend == 'gemini' %}checked{% endif %}>
+          <span><strong>Google Gemini</strong>
+            <small style="opacity:.65;">({{ gemini_model }})</small></span>
+        </label>
+        <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;">
+          <input type="radio" name="backend" value="local"
+                 {% if backend == 'local' %}checked{% endif %}>
+          <span><strong>Ollama / TinyLlama</strong>
+            <small style="opacity:.65;">(local — unfiltered)</small></span>
+        </label>
+      </div>
+    </fieldset>
     <label class="field">
       <span class="field__label">Your message</span>
       <textarea class="input textarea" name="prompt" rows="5"
@@ -31,7 +49,12 @@
 
 {% if reply %}
 <section class="card settings-card ai-reply">
-  <h2 class="settings-card__title">Assistant</h2>
+  <h2 class="settings-card__title">
+    Assistant
+    <small style="font-weight:normal;opacity:.55;font-size:.7em;margin-left:.4rem;">
+      via {% if backend == 'local' %}Ollama / TinyLlama (local — unfiltered){% else %}Google Gemini ({{ gemini_model }}){% endif %}
+    </small>
+  </h2>
   {# VULN: LLM output rendered unescaped (LLM02 insecure output handling) -> model-driven XSS. #}
   <div class="ai-reply__body markdown">{{ reply|safe }}</div>
 </section>
