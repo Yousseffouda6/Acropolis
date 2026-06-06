@@ -79,7 +79,7 @@ Phase 0 establishes this repository and design. Subsequent phases are sequenced 
 - [x] **Phase 4 — SIEM (Blue Team).** Deployed a dedicated **Wazuh** SIEM on its own EC2 instance — separate from the monitored host — with a Wazuh agent on the Acropolis box shipping host telemetry to the manager over the VPC's private network; dashboard and agent ports kept off the public internet. See below.
 - [x] **Phase 5 — Attack & detect (Offensive + Blue Team loop).** Attacked the live host from Kali across three vectors (SSH brute force, post-compromise host actions, web-layer attacks) and hunted each in Wazuh — surfacing the lab's sharpest lesson: a noisy scan raised ~7,000 alerts while a successful SQLi login bypass raised zero. See below.
 - [x] **Phase 6 — AI/LLM security.** Added an **AI Assistant** (`/ai`) with five planted LLM flaws — prompt injection, system-prompt secret leakage, insecure output handling (LLM-driven XSS), indirect prompt injection, and excessive agency. Red-teamed against both a frontier cloud model (Gemini 2.5 Flash Lite) and a local unaligned model (TinyLlama 1.1B via Ollama); all five confirmed. See below.
-- [ ] **Phase 7 — Post-quantum cryptography.** Implement an ML-KEM hybrid key exchange via Open Quantum Safe; document the link to IBM's FIPS 203 contribution.
+- [x] **Phase 7 — Post-quantum cryptography.** Built a runnable demo of the two NIST PQC standards via Open Quantum Safe — **ML-KEM-768** (FIPS 203, IBM's CRYSTALS-Kyber) key exchange and **ML-DSA-65** (FIPS 204, CRYSTALS-Dilithium) signatures — measured their 3–8x size cost against RSA-3072, and inventoried every use of cryptography in Phases 1–5 as quantum-safe (symmetric) or quantum-vulnerable (asymmetric). See below.
 - [ ] **Phase 8 — Remediation & publication.** Fix every planted flaw, verify the pipeline goes green and alerts go quiet, record a short demo, publish per-phase writeups.
 
 ---
@@ -183,9 +183,17 @@ vulnerable `requests`. Full red-team notes and the Gemini vs TinyLlama compariso
 
 ---
 
-## Post-quantum cryptography module
+## Phase 7 — Post-quantum cryptography
 
-The two general-purpose NIST post-quantum standards finalized in 2024 — ML-KEM (FIPS 203, formerly CRYSTALS-Kyber) and ML-DSA (FIPS 204, formerly CRYSTALS-Dilithium) — were developed by IBM researchers with industry and academic partners. This module implements a **hybrid key exchange** (a classical algorithm combined with ML-KEM) using the Open Quantum Safe project, demonstrating how systems can migrate to quantum-resistant cryptography today without abandoning current security guarantees.
+The lab's forward-looking module. There is no exploit and no flag — the adversary is a machine that doesn't exist yet. Phase 7 builds a runnable demo of the two general-purpose NIST post-quantum standards finalized in 2024 — **ML-KEM** (FIPS 203, formerly CRYSTALS-Kyber) for key exchange and **ML-DSA** (FIPS 204, formerly CRYSTALS-Dilithium) for signatures, both developed by IBM researchers with academic and industry partners — via the Open Quantum Safe (`liboqs`) project. It lives in [`pqc/`](./pqc); the full threat-model writeup is [`writeups/phase-7-pqc.md`](./writeups/phase-7-pqc.md).
+
+[`pqc/pqc_demo.py`](./pqc/pqc_demo.py) runs an ML-KEM-768 key encapsulation (Alice and Bob derive an identical 32-byte secret), an ML-DSA-65 sign/verify with a tampered-message rejection, and a size comparison against a classical RSA-3072 public key. The three lessons:
+
+- **Shor breaks asymmetric crypto; Grover only dents symmetric.** A quantum computer ends RSA, Diffie-Hellman, and ECDSA/EdDSA, but merely halves the effective strength of symmetric primitives — so **AES-256 and SHA-384/512 stay safe**. The threat is specifically to key exchange and signatures.
+- **"Harvest now, decrypt later" makes it urgent today.** An adversary can capture encrypted traffic now and decrypt it once a quantum computer exists, so any secret with a long confidentiality lifetime is already exposed.
+- **The cost is bytes, not security.** PQC public keys and signatures run **3–8x** larger than an RSA-3072 public key (the ML-DSA-65 signature is ~8x) — bigger handshakes and certificates are the genuine migration cost. The derived shared secret stays a compact 32 bytes.
+
+The phase closes with a **cryptographic inventory** of everything built in Phases 1–5: the session-cookie HMAC (symmetric → quantum-safe, though still hardcoded — VULN #1) versus the nginx, SSH, and Wazuh TLS handshakes (all asymmetric → quantum-vulnerable, migrate to hybrid **X25519MLKEM768**). You cannot migrate what you cannot see; the inventory is the realistic first step.
 
 Scope note: this module covers post-quantum cryptography (software). Quantum Key Distribution is a hardware/photonics discipline and is intentionally out of scope; it is discussed conceptually in the accompanying writeup but not implemented.
 

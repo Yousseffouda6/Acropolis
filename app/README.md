@@ -103,6 +103,18 @@ separate from the six above and from the `6/6` Phase-1 regression gate:
 All AI calls use the standard library, deliberately bypassing the pinned vulnerable `requests`.
 Full writeup: [`../writeups/phase-6-ai-llm.md`](../writeups/phase-6-ai-llm.md).
 
+### Phase 7 — Post-quantum crypto inventory
+
+The lab's [post-quantum cryptography module](../pqc/) (Phase 7) demos the NIST PQC standards
+**ML-KEM-768** (FIPS 203, key exchange) and **ML-DSA-65** (FIPS 204, signatures), then inventories
+every use of crypto across the lab. The only one inside this app is **session-cookie signing**:
+Flask signs the session with the hardcoded `SECRET_KEY` via `itsdangerous` (HMAC-SHA). That is
+**symmetric** crypto, so it is **quantum-safe** — a quantum computer's Grover speedup only halves
+symmetric strength, leaving HMAC effectively intact. Its problem is entirely *classical*: the key
+is hardcoded in [`app.py`](app.py) (VULN #1), so sessions are forgeable offline today. The
+asymmetric, quantum-vulnerable crypto (TLS, SSH) lives in the deployment layer, not the app.
+Full inventory: [`../writeups/phase-7-pqc.md`](../writeups/phase-7-pqc.md).
+
 ## Verify the flaws still fire
 
 ```bash
