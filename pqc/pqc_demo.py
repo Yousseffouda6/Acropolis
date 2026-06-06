@@ -24,9 +24,19 @@ via the Open Quantum Safe project's `oqs` (liboqs-python) bindings:
 
 How to run
 ----------
-    pyenv shell 3.11.9
-    pip install -r pqc/requirements.txt
-    python pqc/pqc_demo.py
+This script runs cleanly inside a python:3.12-slim Docker container. Installing
+liboqs-python directly on the host tends to fail on Apple Silicon, where an
+Anaconda Python and liboqs's own build-time architecture assumptions collide
+while compiling the liboqs C library; the slim container sidesteps that with a
+clean, single-architecture toolchain. From the repository root:
+
+    docker run --rm -it -v "$PWD":/work python:3.12-slim bash
+    # then, inside the container:
+    apt-get update && apt-get install -y cmake gcc git libssl-dev
+    pip install git+https://github.com/open-quantum-safe/liboqs-python.git cryptography
+    python /work/pqc/pqc_demo.py
+
+See pqc/README.md for the same steps and the expected output.
 
 Notes
 -----
@@ -165,8 +175,9 @@ def print_comparison(sizes):
     """Print a classical-vs-post-quantum key-size table."""
     section("3. Key-size comparison — classical vs post-quantum")
 
+    baseline = sizes["rsa_public_key"]
     rows = [
-        ("RSA-3072 (classical)", "public key", sizes["rsa_public_key"]),
+        ("RSA-3072 (classical)", "public key", baseline),
         ("ML-KEM-768 (PQC)", "public key", sizes["kem_public_key"]),
         ("ML-KEM-768 (PQC)", "ciphertext", sizes["kem_ciphertext"]),
         ("ML-KEM-768 (PQC)", "shared secret", sizes["kem_shared_secret"]),
@@ -174,17 +185,18 @@ def print_comparison(sizes):
         ("ML-DSA-65 (PQC)", "signature", sizes["sig_signature"]),
     ]
 
-    print(f"  {'Algorithm':<24}{'Artifact':<16}{'Size (bytes)':>14}")
-    print("  " + "-" * 54)
+    print(f"  {'Algorithm':<24}{'Artifact':<16}{'Size (bytes)':>13}{'vs RSA-3072':>14}")
+    print("  " + "-" * 67)
     for algorithm, artifact, size in rows:
-        print(f"  {algorithm:<24}{artifact:<16}{size:>14,}")
+        ratio = f"{size / baseline:.1f}x"
+        print(f"  {algorithm:<24}{artifact:<16}{size:>13,}{ratio:>14}")
 
-    factor = sizes["kem_public_key"] / sizes["rsa_public_key"]
     print()
-    print(f"  ML-KEM-768 public keys are ~{factor:.1f}x larger than an RSA-3072")
-    print("  public key — the size cost of resisting a cryptographically-relevant")
-    print("  quantum computer. The derived shared secret stays a compact 32 bytes,")
-    print("  ready to key a fast symmetric cipher (e.g. AES-256-GCM).")
+    print("  Post-quantum public keys and signatures run roughly 3-8x the size of")
+    print("  an RSA-3072 public key — the ML-DSA-65 signature alone is ~8x. That")
+    print("  growth is the real migration cost: bigger handshakes, bigger")
+    print("  certificates, more bytes on every connection. The derived ML-KEM")
+    print("  shared secret stays a compact 32 bytes, ready to key AES-256-GCM.")
 
 
 def main():
