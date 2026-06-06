@@ -86,19 +86,22 @@ Full walkthrough — what / where / demo / detected-by / fix — lives in
 
 ### Phase 6 — AI/LLM flaws (`/ai` assistant)
 
-The Gemini-backed **AI Assistant** adds three more planted flaws, mapped to the
-OWASP Top 10 for LLM Applications. These are separate from the six above and from
-the `6/6` Phase-1 regression gate:
+The **AI Assistant** (`/ai`) adds five more planted flaws, mapped to the OWASP Top 10 for LLM
+Applications. Two backends are supported: **Gemini 2.5 Flash Lite** (cloud) and
+**TinyLlama 1.1B** (local via Ollama — no internet, no safety training). These flaws are
+separate from the six above and from the `6/6` Phase-1 regression gate:
 
-| # | Class | Where |
-| --- | ----- | ----- |
-| AI-1 | Prompt injection (LLM01) | only a natural-language "never reveal" guard inside `SYSTEM_PROMPT` |
-| AI-2 | System-prompt secret leak (LLM06) | the admin recovery flag is baked into `SYSTEM_PROMPT` in [`app.py`](app.py) |
-| AI-3 | Insecure output handling (LLM02) | the model's reply is rendered with `\|safe` in `templates/ai.html` → model-driven XSS |
+| # | Class | OWASP | Where |
+| --- | ----- | ----- | ----- |
+| AI-1 | Prompt injection | LLM01 | only a natural-language guard in `SYSTEM_PROMPT`; alignment-dependent — confirmed on TinyLlama |
+| AI-2 | System-prompt secret leak | LLM06 | admin flag hardcoded in `SYSTEM_PROMPT` in [`app.py`](app.py) |
+| AI-3 | Insecure output handling → XSS | LLM02 | `{{ reply\|safe }}` in `templates/ai.html` — model-driven XSS, confirmed both models |
+| AI-4 | Indirect prompt injection | LLM01 | notes injected verbatim via `notes_for_assistant()` — untrusted data treated as instructions |
+| AI-5 | Excessive Agency | LLM08 | `delete_note` callable with no confirmation; chained with AI-4 to delete notes silently |
 
-The key is read from `GEMINI_API_KEY` at call time (never committed, never written
-to disk); the Gemini call uses only the standard library, deliberately avoiding the
-pinned, vulnerable `requests`.
+`GEMINI_API_KEY` is read from a gitignored `.env` file; the Ollama backend needs no key.
+All AI calls use the standard library, deliberately bypassing the pinned vulnerable `requests`.
+Full writeup: [`../writeups/phase-6-ai-llm.md`](../writeups/phase-6-ai-llm.md).
 
 ## Verify the flaws still fire
 

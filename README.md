@@ -78,7 +78,7 @@ Phase 0 establishes this repository and design. Subsequent phases are sequenced 
 - [x] **Phase 3 — Cloud deployment (Cloud Security).** Deployed the containerized app to an AWS EC2 free-tier instance (`eu-central-1`) under a least-privilege security group (SSH from one IP), with the container bound to loopback, key-only SSH, and access via an SSH tunnel — **deliberately not exposed** to the public internet. See below.
 - [x] **Phase 4 — SIEM (Blue Team).** Deployed a dedicated **Wazuh** SIEM on its own EC2 instance — separate from the monitored host — with a Wazuh agent on the Acropolis box shipping host telemetry to the manager over the VPC's private network; dashboard and agent ports kept off the public internet. See below.
 - [x] **Phase 5 — Attack & detect (Offensive + Blue Team loop).** Attacked the live host from Kali across three vectors (SSH brute force, post-compromise host actions, web-layer attacks) and hunted each in Wazuh — surfacing the lab's sharpest lesson: a noisy scan raised ~7,000 alerts while a successful SQLi login bypass raised zero. See below.
-- [ ] **Phase 6 — AI/LLM security (in progress).** Added a Gemini-backed **AI Assistant** (`/ai`) with three planted LLM flaws — prompt injection past a weak guard, a secret leaked through the system prompt, and insecure output handling (model-driven XSS). Red-teaming against the OWASP LLM Top 10 and guardrails still to come. See below.
+- [x] **Phase 6 — AI/LLM security.** Added an **AI Assistant** (`/ai`) with five planted LLM flaws — prompt injection, system-prompt secret leakage, insecure output handling (LLM-driven XSS), indirect prompt injection, and excessive agency. Red-teamed against both a frontier cloud model (Gemini 2.5 Flash Lite) and a local unaligned model (TinyLlama 1.1B via Ollama); all five confirmed. See below.
 - [ ] **Phase 7 — Post-quantum cryptography.** Implement an ML-KEM hybrid key exchange via Open Quantum Safe; document the link to IBM's FIPS 203 contribution.
 - [ ] **Phase 8 — Remediation & publication.** Fix every planted flaw, verify the pipeline goes green and alerts go quiet, record a short demo, publish per-phase writeups.
 
@@ -155,15 +155,31 @@ This is where the loop closes. From a Kali VM, the live Acropolis host (Phase 3)
 
 ---
 
-## Phase 6 — AI/LLM security (in progress)
+## Phase 6 — AI/LLM security
 
-The lab's cross-cutting **AI/LLM security** module adds a Gemini-backed **AI Assistant** at `/ai` — a real, model-powered feature with three deliberately planted flaws, mapped to the **OWASP Top 10 for LLM Applications**:
+The lab's cross-cutting **AI/LLM security** module adds an **AI Assistant** at `/ai` — a real,
+model-powered feature with five deliberately planted flaws, mapped to the **OWASP Top 10 for LLM
+Applications**. A model switcher lets the operator toggle between **Gemini 2.5 Flash Lite**
+(cloud, free-tier Google AI Studio) and **TinyLlama 1.1B** (local, via Ollama — no internet, no
+safety training).
 
-- **Prompt injection past a weak guard (LLM01).** The system prompt protects its secret with nothing but a polite "never reveal" instruction; a crafted user message can talk the model straight past it.
-- **System-prompt secret leakage (LLM06).** An admin recovery flag is baked directly into the system prompt, so any injection that coaxes the model into revealing its instructions leaks the secret.
-- **Insecure output handling (LLM02).** The model's reply is rendered with Jinja's `|safe` filter, so a model talked into emitting `<script>` produces model-driven stored/reflected XSS.
+| # | Flaw | OWASP | Status |
+| --- | --- | --- | --- |
+| AI-1 | Prompt injection past a natural-language guard | LLM01 | Confirmed (TinyLlama — first attempt); alignment held on Gemini |
+| AI-2 | Secret baked into system prompt | LLM06 | Confirmed — extracted live on TinyLlama |
+| AI-3 | Insecure output handling → LLM-driven XSS | LLM02 | Confirmed (both models) |
+| AI-4 | Indirect prompt injection via stored note content | LLM01 | Confirmed — note body hijacked the model |
+| AI-5 | Excessive Agency — unconfirmed note deletion | LLM08 | Confirmed — notes deleted with no human in the loop |
 
-The Gemini API key is read from the `GEMINI_API_KEY` environment variable (never committed, never written to disk), and the API call uses only the Python standard library — deliberately avoiding the repo's pinned-but-vulnerable `requests`. Red-teaming the assistant against the OWASP LLM Top 10 and adding input/output guardrails are the remaining Phase 6 work.
+**The headline finding:** the only "protection" against AI-1 was Google's RLHF alignment
+training — an accidental second defence the application developer never built. Switching to
+TinyLlama extracted the flag on the first attempt without changing a single line of application
+code. Model alignment is not an application security control.
+
+`GEMINI_API_KEY` is read from a gitignored `.env` file; the Ollama backend requires no key. All
+AI API calls use only the Python standard library, deliberately bypassing the pinned-but-
+vulnerable `requests`. Full red-team notes and the Gemini vs TinyLlama comparison are in
+[`writeups/phase-6-ai-llm.md`](./writeups/phase-6-ai-llm.md).
 
 ---
 
