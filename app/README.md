@@ -84,6 +84,22 @@ The admin's note (id **6** on a fresh seed) contains
 Full walkthrough — what / where / demo / detected-by / fix — lives in
 [`../writeups/phase-1-appsec.md`](../writeups/phase-1-appsec.md).
 
+### Phase 6 — AI/LLM flaws (`/ai` assistant)
+
+The Gemini-backed **AI Assistant** adds three more planted flaws, mapped to the
+OWASP Top 10 for LLM Applications. These are separate from the six above and from
+the `6/6` Phase-1 regression gate:
+
+| # | Class | Where |
+| --- | ----- | ----- |
+| AI-1 | Prompt injection (LLM01) | only a natural-language "never reveal" guard inside `SYSTEM_PROMPT` |
+| AI-2 | System-prompt secret leak (LLM06) | the admin recovery flag is baked into `SYSTEM_PROMPT` in [`app.py`](app.py) |
+| AI-3 | Insecure output handling (LLM02) | the model's reply is rendered with `\|safe` in `templates/ai.html` → model-driven XSS |
+
+The key is read from `GEMINI_API_KEY` at call time (never committed, never written
+to disk); the Gemini call uses only the standard library, deliberately avoiding the
+pinned, vulnerable `requests`.
+
 ## Verify the flaws still fire
 
 ```bash

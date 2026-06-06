@@ -78,7 +78,7 @@ Phase 0 establishes this repository and design. Subsequent phases are sequenced 
 - [x] **Phase 3 — Cloud deployment (Cloud Security).** Deployed the containerized app to an AWS EC2 free-tier instance (`eu-central-1`) under a least-privilege security group (SSH from one IP), with the container bound to loopback, key-only SSH, and access via an SSH tunnel — **deliberately not exposed** to the public internet. See below.
 - [x] **Phase 4 — SIEM (Blue Team).** Deployed a dedicated **Wazuh** SIEM on its own EC2 instance — separate from the monitored host — with a Wazuh agent on the Acropolis box shipping host telemetry to the manager over the VPC's private network; dashboard and agent ports kept off the public internet. See below.
 - [x] **Phase 5 — Attack & detect (Offensive + Blue Team loop).** Attacked the live host from Kali across three vectors (SSH brute force, post-compromise host actions, web-layer attacks) and hunted each in Wazuh — surfacing the lab's sharpest lesson: a noisy scan raised ~7,000 alerts while a successful SQLi login bypass raised zero. See below.
-- [ ] **Phase 6 — AI/LLM security.** Add a model-backed feature; red-team against the OWASP LLM Top 10; implement guardrails.
+- [ ] **Phase 6 — AI/LLM security (in progress).** Added a Gemini-backed **AI Assistant** (`/ai`) with three planted LLM flaws — prompt injection past a weak guard, a secret leaked through the system prompt, and insecure output handling (model-driven XSS). Red-teaming against the OWASP LLM Top 10 and guardrails still to come. See below.
 - [ ] **Phase 7 — Post-quantum cryptography.** Implement an ML-KEM hybrid key exchange via Open Quantum Safe; document the link to IBM's FIPS 203 contribution.
 - [ ] **Phase 8 — Remediation & publication.** Fix every planted flaw, verify the pipeline goes green and alerts go quiet, record a short demo, publish per-phase writeups.
 
@@ -152,6 +152,18 @@ This is where the loop closes. From a Kali VM, the live Acropolis host (Phase 3)
 - **Web-layer attacks** via an nginx reverse proxy (port 80 to the attacker only) → a nikto scan plus GET-based SQLi/XSS/path-traversal triggered ~**7,000** alerts (**31101/31103/31105/31106**).
 
 **The headline finding inverts the intuition.** The *real* attack — the planted POST SQLi login bypass (`' OR '1'='1' --`) — **succeeded** (302, valid session, account takeover) and raised **zero** alerts, because nginx access logs record the URL but never the request body. A useless noisy scan = ~7,000 alerts; a full account takeover = 0: **detection was inversely correlated with danger.** Worse, the session is signed with the hardcoded `SECRET_KEY` (VULN #1), so sessions are forgeable offline. The full engagement, the caught-vs-missed table, and remediation options are in [`writeups/phase-5-attack-detect.md`](./writeups/phase-5-attack-detect.md).
+
+---
+
+## Phase 6 — AI/LLM security (in progress)
+
+The lab's cross-cutting **AI/LLM security** module adds a Gemini-backed **AI Assistant** at `/ai` — a real, model-powered feature with three deliberately planted flaws, mapped to the **OWASP Top 10 for LLM Applications**:
+
+- **Prompt injection past a weak guard (LLM01).** The system prompt protects its secret with nothing but a polite "never reveal" instruction; a crafted user message can talk the model straight past it.
+- **System-prompt secret leakage (LLM06).** An admin recovery flag is baked directly into the system prompt, so any injection that coaxes the model into revealing its instructions leaks the secret.
+- **Insecure output handling (LLM02).** The model's reply is rendered with Jinja's `|safe` filter, so a model talked into emitting `<script>` produces model-driven stored/reflected XSS.
+
+The Gemini API key is read from the `GEMINI_API_KEY` environment variable (never committed, never written to disk), and the API call uses only the Python standard library — deliberately avoiding the repo's pinned-but-vulnerable `requests`. Red-teaming the assistant against the OWASP LLM Top 10 and adding input/output guardrails are the remaining Phase 6 work.
 
 ---
 

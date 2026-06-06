@@ -31,6 +31,10 @@
          href="{{ url_for('settings') }}">
         <span class="nav__icon" aria-hidden="true">&#9881;</span> Settings
       </a>
+      <a class="nav__link {{ 'is-active' if request.endpoint == 'ai_assistant' }}"
+         href="{{ url_for('ai_assistant') }}">
+        <span class="nav__icon" aria-hidden="true">&#10022;</span> AI Assistant
+      </a>
     </nav>
 
     {% if sidebar_tags %}
