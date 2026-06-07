@@ -123,7 +123,11 @@ the entire migration.
 
 [`pqc/pqc_demo.py`](../pqc/pqc_demo.py) exercises both standards through Open
 Quantum Safe and measures every artifact. Numbers below are the actual output
-against liboqs 0.15.0.
+against liboqs 0.15.0. (The demo exercises ML-KEM-768 **standalone** — the
+clearest way to measure each artifact. The production **hybrid** — classical
+X25519 concatenated with ML-KEM-768, i.e. `X25519MLKEM768` — is what actually
+runs on the nginx front door, under *Migration performed* below; the roadmap's
+"ML-KEM hybrid key exchange" is delivered there, at the TLS layer.)
 
 **ML-KEM-768 key encapsulation.** Alice generates a keypair; Bob encapsulates a
 secret against her public key; Alice decapsulates the ciphertext. Both sides derive

@@ -161,3 +161,38 @@ The script pulls `origin/main`, rebuilds, and replaces the container
   SQLite DB (the `FLAG{...}` note returns). The lab target is meant to be reset-friendly.
 - **Do not** add a `-p 0.0.0.0:5000:5000` mapping or a 5000 security-group rule.
   That single change would put unauthenticated RCE on the open internet.
+
+---
+
+## 8. Hybrid post-quantum TLS front door (Phases 5 + 7)
+
+Phase 5 put an **nginx reverse proxy** in front of the loopback-bound app (so the
+web-layer attacks had a normal HTTP front door); Phase 7 migrated that proxy's
+TLS to a **hybrid post-quantum** key exchange. The config is committed at
+[`nginx-acropolis.conf`](./nginx-acropolis.conf):
+
+- nginx terminates **TLS 1.3** on 443 and `proxy_pass`es to `127.0.0.1:5000` —
+  the app stays loopback-bound exactly as in §4, so nginx is the only component
+  that faces the network.
+- `ssl_ecdh_curve X25519MLKEM768:X25519` selects a **hybrid** key exchange:
+  classical X25519 concatenated with ML-KEM-768, with classical fallback for
+  clients that don't support it. This needs **OpenSSL 3.5+** (the lab box runs
+  3.5.5, which has native ML-KEM).
+- Same perimeter discipline as §2: if you open 443 in the security group, scope
+  it to your `<YOUR_IP>/32`, never `0.0.0.0/0`.
+
+```bash
+# install the config + a self-signed lab cert (a real deploy uses an ACME/CA cert)
+sudo cp infra/nginx-acropolis.conf /etc/nginx/sites-available/acropolis
+sudo ln -sf /etc/nginx/sites-available/acropolis /etc/nginx/sites-enabled/acropolis
+sudo mkdir -p /etc/nginx/tls
+sudo openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+  -keyout /etc/nginx/tls/acropolis.key -out /etc/nginx/tls/acropolis.crt \
+  -subj "/CN=acropolis.lab"
+sudo nginx -t && sudo systemctl reload nginx
+
+# confirm the hybrid group was actually negotiated (needs OpenSSL 3.5+):
+openssl s_client -connect localhost:443 -groups X25519MLKEM768 </dev/null 2>/dev/null \
+  | grep -i "Negotiated TLS1.3 group"
+# expect:  Negotiated TLS1.3 group: X25519MLKEM768
+```

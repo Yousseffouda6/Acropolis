@@ -51,18 +51,22 @@ The lab is built to run efficiently on Apple Silicon: containers (multi-arch, AR
 
 ---
 
-## Repository structure (planned)
+## Repository structure
 
 ```text
 acropolis/
-├── app/                  # Deliberately vulnerable application (AppSec)
-├── .github/workflows/    # CI/CD security pipeline (DevSecOps)
-├── infra/                # Cloud deployment + configuration (Cloud Security)
-├── detection/            # Wazuh rules, decoders, dashboards (Blue Team)
-├── offensive/            # Attack playbooks and findings (Offensive)
-├── pqc/                  # ML-KEM hybrid key-exchange module
-├── ai-security/          # LLM feature + red-team notes
-├── writeups/             # Per-phase writeups (vuln → exploit → detect → fix)
+├── app/                  # Acropolis Notes — the app (AppSec target + AI assistant)
+│   ├── app.py            #   routes; hardened in Phase 8 (was the 6 + 5 vuln sink)
+│   ├── db.py             #   schema + seed (salted password hashes)
+│   ├── test_exploits.py  #   remediation regression gate — 6/6 exploits blocked
+│   └── list_models.py    #   helper: list the Gemini models your API key can use
+├── .github/workflows/    # CI/CD security pipeline (DevSecOps) — blocking from Phase 8
+├── infra/                # Cloud deploy runbook + script + nginx hybrid-PQC TLS conf
+├── detection/            # Wazuh SIEM deployment runbook (Blue Team)
+├── pqc/                  # Post-quantum demo: ML-KEM-768 + ML-DSA-65 (Open Quantum Safe)
+├── ai-security/          # Pointer: the AI feature lives in app/, red-team in writeups/
+├── offensive/            # Pointer: the engagement lives in writeups/phase-5-attack-detect.md
+├── writeups/             # Per-phase writeups (phase-1 … phase-8)
 └── README.md
 ```
 
@@ -193,7 +197,7 @@ The lab's forward-looking module. There is no exploit and no flag — the advers
 - **"Harvest now, decrypt later" makes it urgent today.** An adversary can capture encrypted traffic now and decrypt it once a quantum computer exists, so any secret with a long confidentiality lifetime is already exposed.
 - **The cost is bytes, not security.** PQC public keys and signatures run **3–8x** larger than an RSA-3072 public key (the ML-DSA-65 signature is ~8x) — bigger handshakes and certificates are the genuine migration cost. The derived shared secret stays a compact 32 bytes.
 
-The phase closes with a **cryptographic inventory** of everything built in Phases 1–5: the session-cookie HMAC (symmetric → quantum-safe, though still hardcoded — VULN #1) versus the nginx, SSH, and Wazuh TLS handshakes (all asymmetric → quantum-vulnerable, migrate to hybrid **X25519MLKEM768**). You cannot migrate what you cannot see; the inventory is the realistic first step.
+The phase closes with a **cryptographic inventory** of everything built in Phases 1–5: the session-cookie HMAC (symmetric → quantum-safe; its hardcoded-key flaw was a *classical* issue, fixed in Phase 8) versus the asymmetric TLS/SSH handshakes. The **nginx front door is already migrated** to hybrid **X25519MLKEM768** (TLS 1.3, OpenSSL 3.5.5; config in [`infra/nginx-acropolis.conf`](./infra/nginx-acropolis.conf)); SSH and the Wazuh dashboard TLS remain classical (known future work). You cannot migrate what you cannot see; the inventory is the realistic first step.
 
 Scope note: this module covers post-quantum cryptography (software). Quantum Key Distribution is a hardware/photonics discipline and is intentionally out of scope; it is discussed conceptually in the accompanying writeup but not implemented.
 

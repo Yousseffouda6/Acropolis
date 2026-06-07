@@ -2,13 +2,15 @@
 
 A small but complete, server-rendered **Markdown notes** web app — and the
 Phase 1 **application-security target** for the [Acropolis lab](../README.md).
-It looks and behaves like a real product, but it deliberately ships with a
+It looks and behaves like a real product, and it deliberately shipped with a
 catalogue of planted security flaws used throughout the lab's exploit → detect →
-fix loop.
+fix loop — all **remediated in Phase 8**.
 
-> ⚠️ **Intentionally vulnerable software.** This app is built to be attacked in a
-> controlled environment. Do not deploy it to the public internet and do not put
-> real data in it. Every flaw below is planted on purpose.
+> ⚠️ **Security lab — read this.** This app was the lab's deliberately vulnerable
+> target (Phases 1 & 6) and was **hardened in Phase 8**; the planted flaws below
+> are fixed. The original vulnerable build is preserved at the git tag
+> `v1.0-vulnerable` — check it out for demonstrations, but never deploy it to the
+> public internet or put real data in it.
 
 ---
 
@@ -69,20 +71,24 @@ The admin's note (id **6** on a fresh seed) contains
 
 ---
 
-## The planted vulnerabilities
+## The planted vulnerabilities — and their Phase 8 fixes
 
-| # | Class | Where |
-| - | ----- | ----- |
-| 1 | Hardcoded secrets | `SECRET_KEY` / `ADMIN_API_KEY` in [`app.py`](app.py); surfaced on `/settings` |
-| 2 | SQL injection | login query built by string concatenation in `/login` |
-| 3 | IDOR | `/notes/<id>` fetches by id with no ownership check |
-| 4 | Insecure deserialization | `/settings/import` calls `yaml.load(..., Loader=yaml.Loader)` |
-| 5 | Vulnerable dependency | `requests==2.19.1` pinned in `requirements.txt` (never imported) |
-| 6 | Stored XSS | note titles/bodies rendered as raw, unsanitised HTML |
-| + | Bonus | `debug=True`, passwords stored in plaintext |
+All of these were planted on purpose and **fixed in Phase 8**. The
+deliberately-vulnerable build is preserved at the git tag `v1.0-vulnerable`.
 
-Full walkthrough — what / where / demo / detected-by / fix — lives in
-[`../writeups/phase-1-appsec.md`](../writeups/phase-1-appsec.md).
+| # | Class | Where (vulnerable build) | Fix (Phase 8) |
+| - | ----- | ----- | ----- |
+| 1 | Hardcoded secrets | `SECRET_KEY` / `ADMIN_API_KEY` in `app.py`; surfaced on `/settings` | read from env; random `SECRET_KEY` fallback |
+| 2 | SQL injection | login query built by string concatenation in `/login` | parameterised query + hashed-password check |
+| 3 | IDOR | `/notes/<id>` fetched by id with no ownership check | ownership enforced; non-owner → 404 |
+| 4 | Insecure deserialization | `/settings/import` called `yaml.load(..., Loader=yaml.Loader)` | `yaml.safe_load` |
+| 5 | Vulnerable dependency | `requests==2.19.1` pinned (never imported) | removed (was unused) |
+| 6 | Stored XSS | note titles/bodies rendered as raw HTML | `nh3` sanitises rendered HTML; title auto-escaped |
+| + | Bonus | `debug=True`, plaintext passwords | `debug` off by default; salted `werkzeug` hashes |
+
+Full walkthrough of the flaws is in
+[`../writeups/phase-1-appsec.md`](../writeups/phase-1-appsec.md); the remediation
+is in [`../writeups/phase-8-remediation.md`](../writeups/phase-8-remediation.md).
 
 ### Phase 6 — AI/LLM flaws (`/ai` assistant)
 
@@ -99,40 +105,49 @@ separate from the six above and from the `6/6` Phase-1 regression gate:
 | AI-4 | Indirect prompt injection | LLM01 | notes injected verbatim via `notes_for_assistant()` — untrusted data treated as instructions |
 | AI-5 | Excessive Agency | LLM08 | `delete_note` callable with no confirmation; chained with AI-4 to delete notes silently |
 
+All five were **fixed in Phase 8**: the secret was removed from `SYSTEM_PROMPT`, the model's
+create/update/delete tools were removed (read-only assistant), the reply is sanitised, and note
+content is framed as untrusted data with an output guard (prompt injection is *mitigated*, not
+eliminated).
+
 `GEMINI_API_KEY` is read from a gitignored `.env` file; the Ollama backend needs no key.
-All AI calls use the standard library, deliberately bypassing the pinned vulnerable `requests`.
-Full writeup: [`../writeups/phase-6-ai-llm.md`](../writeups/phase-6-ai-llm.md).
+All AI calls use the standard library (the unused `requests` pin was removed in Phase 8).
+Writeup: [`../writeups/phase-6-ai-llm.md`](../writeups/phase-6-ai-llm.md) · remediation:
+[`../writeups/phase-8-remediation.md`](../writeups/phase-8-remediation.md).
 
 ### Phase 7 — Post-quantum crypto inventory
 
 The lab's [post-quantum cryptography module](../pqc/) (Phase 7) demos the NIST PQC standards
 **ML-KEM-768** (FIPS 203, key exchange) and **ML-DSA-65** (FIPS 204, signatures), then inventories
 every use of crypto across the lab. The only one inside this app is **session-cookie signing**:
-Flask signs the session with the hardcoded `SECRET_KEY` via `itsdangerous` (HMAC-SHA). That is
-**symmetric** crypto, so it is **quantum-safe** — a quantum computer's Grover speedup only halves
-symmetric strength, leaving HMAC effectively intact. Its problem is entirely *classical*: the key
-is hardcoded in [`app.py`](app.py) (VULN #1), so sessions are forgeable offline today. The
-asymmetric, quantum-vulnerable crypto (TLS, SSH) lives in the deployment layer, not the app.
+Flask signs the session with `SECRET_KEY` via `itsdangerous` (HMAC-SHA). That is **symmetric**
+crypto, so it is **quantum-safe** — a quantum computer's Grover speedup only halves symmetric
+strength, leaving HMAC effectively intact. Its only problem was *classical*: the key used to be
+hardcoded (old VULN #1) — **fixed in Phase 8**, now read from the environment. The asymmetric
+crypto lives in the deployment layer: the **nginx front door is migrated** to hybrid PQC
+(`X25519MLKEM768`), while SSH and the Wazuh dashboard TLS remain classical (future work).
 Full inventory: [`../writeups/phase-7-pqc.md`](../writeups/phase-7-pqc.md).
 
-## Verify the flaws still fire
+## Verify the fixes hold
 
 ```bash
 python db.py
 python test_exploits.py
 ```
 
-`test_exploits.py` drives the Flask test client and asserts that all six
-vulnerabilities are still exploitable. A passing run (`6/6`) is the regression
-gate that proves a refactor didn't accidentally fix the lab.
+`test_exploits.py` drives the Flask test client and asserts that all six planted
+exploits are now **blocked**. A passing run (`6/6`) is the remediation regression
+gate — it fails if a vulnerability is reintroduced. (In the `v1.0-vulnerable`
+build the same suite passed by proving the exploits *fired*.)
 
 ## Layout
 
 ```text
 app/
-├── app.py              # Flask app + routes (all six vulns live here)
-├── db.py               # schema + seed data
-├── test_exploits.py    # exploit regression suite (6/6 must pass)
+├── app.py              # Flask app + routes (hardened in Phase 8)
+├── db.py               # schema + seed (salted password hashes)
+├── test_exploits.py    # remediation regression gate (6/6 = all exploits blocked)
+├── list_models.py      # helper: list Gemini models available to your API key
 ├── requirements.txt
 ├── Dockerfile
 ├── static/             # style.css, app.js, favicon.svg
