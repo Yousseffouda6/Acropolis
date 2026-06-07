@@ -1,0 +1,23 @@
+# Acropolis — gitleaks configuration (Phase 8).
+#
+# The DevSecOps pipeline's secret-scanning job now BLOCKS the build and scans
+# the FULL git history. Phases 1–7 intentionally committed lab secrets into the
+# deliberately-vulnerable build (preserved at the tag `v1.0-vulnerable`); Phase 8
+# removed them from the current tree. The allowlist below tells gitleaks to
+# ignore those specific, now-removed historical lab secrets so the blocking job
+# does not fail on past commits — while still catching any NEW secret introduced
+# from here on.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Intentional Acropolis lab secrets, removed in Phase 8 (history only)."
+regexes = [
+  # Old hardcoded Flask SECRET_KEY (app.py, pre-Phase 8).
+  '''acropolis-dev-secret-key-2026-do-not-rotate''',
+  # Old hardcoded ADMIN_API_KEY, surfaced on /settings (app.py, pre-Phase 8).
+  '''acro_live_sk_[0-9a-f]{32}''',
+  # Lab CTF flags (IDOR seed note + the old system-prompt flag) — not real secrets.
+  '''FLAG\{[^}]*\}''',
+]

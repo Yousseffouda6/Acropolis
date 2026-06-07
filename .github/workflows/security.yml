@@ -1,18 +1,20 @@
-# Acropolis DevSecOps pipeline (Phase 2)
+# Acropolis DevSecOps pipeline
 # ----------------------------------------------------------------------------
-# DESIGN DECISION — REPORT, DON'T BLOCK (yet).
-# Acropolis Notes is vulnerable *by design*: Phase 1 planted six flaws on purpose
-# and they must stay exploitable so later phases can attack and detect the SAME
-# artifact. The job of this pipeline is therefore to PROVE that the scanners SEE
-# those flaws — not to fail the build on them. Every scanning job runs with
-# `continue-on-error: true` and the scan steps swallow non-zero exits (`|| true`),
-# so the pipeline stays green while findings still surface in the Security tab
-# (SARIF) and as build artifacts (the ZAP report).
+# BLOCKING GATE (Phase 8).
+# Through Phases 2–7 this pipeline ran in REPORT-ONLY mode: every job used
+# `continue-on-error: true` and swallowed non-zero exits (`|| true`), because the
+# app was vulnerable *by design* and the planted flaws had to stay exploitable
+# for the attack/detect phases. The findings still surfaced (SARIF in the
+# Security tab, the ZAP report artifact) but never failed the build.
 #
-# Phase 8 (remediation) flips this: once the planted flaws are fixed, drop the
-# `continue-on-error` / `|| true` and add failing severity thresholds so the gate
-# becomes BLOCKING — any *re-introduced* vulnerability then breaks CI. The report
-# -> gate progression is the whole point of the exercise.
+# Phase 8 fixed every planted flaw, so the pipeline is now a BLOCKING gate:
+#   - `continue-on-error` / `|| true` removed — scanner findings fail the build.
+#   - Semgrep runs with `--error`; Trivy with `exit-code: 1` (ignore-unfixed).
+#   - gitleaks blocks on any NEW secret; the removed historical lab secrets are
+#     allow-listed in `.gitleaks.toml` so full-history scanning stays green.
+#   - A new `regression` job runs app/test_exploits.py — the inverted suite that
+#     asserts all six planted exploits remain BLOCKED. A regression fails CI.
+# Tool versions stay pinned. The report -> gate progression is the whole point.
 # ----------------------------------------------------------------------------
 
 name: security
@@ -28,10 +30,10 @@ permissions:
 
 jobs:
   # 1) SAST — static analysis of the source for dangerous code patterns.
+  #    `--error` makes Semgrep exit non-zero (fail the job) on any finding.
   sast:
     name: SAST (Semgrep)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -39,8 +41,8 @@ jobs:
           python-version: "3.11"
       - name: Install Semgrep
         run: pip install semgrep
-      - name: Run Semgrep (SARIF)
-        run: semgrep scan --config=auto --sarif --output=semgrep.sarif app/ || true
+      - name: Run Semgrep (SARIF, blocking)
+        run: semgrep scan --config=auto --error --sarif --output=semgrep.sarif app/
       - name: Upload Semgrep SARIF
         if: always()
         uses: github/codeql-action/upload-sarif@v3
@@ -49,11 +51,11 @@ jobs:
           category: semgrep
 
   # 2) Secret scanning — gitleaks, over the FULL history (fetch-depth: 0) so a
-  #    committed secret is caught even if a later commit removed it.
+  #    committed secret is caught even if a later commit removed it. Blocking;
+  #    `.gitleaks.toml` allow-lists the intentional lab secrets removed in Phase 8.
   secrets:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -62,25 +64,26 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: ${{ github.workspace }}/.gitleaks.toml
 
   # 3) SCA — software composition analysis. Trivy scans the dependency manifest
-  #    (catches requests==2.19.1 + its outdated transitive deps) and then the
-  #    built container image (base-image CVEs).
+  #    and the built container image. Blocking on FIXABLE HIGH/CRITICAL findings
+  #    (`exit-code: 1` + `ignore-unfixed: true`).
   sca:
     name: SCA (Trivy)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - name: Trivy filesystem scan (dependencies)
         uses: aquasecurity/trivy-action@v0.36.0
-        continue-on-error: true
         with:
           scan-type: fs
           scan-ref: app
           format: sarif
           output: trivy-deps.sarif
           severity: MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
       - name: Upload Trivy SARIF
         if: always()
         uses: github/codeql-action/upload-sarif@v3
@@ -91,21 +94,23 @@ jobs:
         run: docker build -t acropolis-notes ./app
       - name: Trivy image scan
         uses: aquasecurity/trivy-action@v0.36.0
-        continue-on-error: true
         with:
           scan-type: image
           image-ref: acropolis-notes
           format: table
           severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
 
   # 4) DAST — dynamic analysis. Build + run the app, wait until it answers, then
   #    point the OWASP ZAP baseline (passive, UNAUTHENTICATED) scan at it.
-  #    NOTE on networking: ZAP runs in its own container, so it must share the
-  #    runner's network (--network host) to reach the app on localhost:5000.
+  #    The job is blocking (no continue-on-error): a scan error fails CI. `-I`
+  #    is kept so ZAP does not fail on purely passive *warnings* (e.g. missing
+  #    security headers — tracked as future hardening, not a planted flaw); those
+  #    are still reported in the uploaded zap-report.html.
   dast:
     name: DAST (OWASP ZAP baseline)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - name: Build image
@@ -133,7 +138,7 @@ jobs:
         run: |
           docker run --network host -v "${{ github.workspace }}/zap-out:/zap/wrk/:rw" \
             ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py -t http://localhost:5000 -r zap-report.html -I || true
+            zap-baseline.py -t http://localhost:5000 -r zap-report.html -I
       - name: Upload ZAP report
         if: always()
         uses: actions/upload-artifact@v4
@@ -141,3 +146,22 @@ jobs:
           name: zap-report
           path: zap-out/zap-report.html
           if-no-files-found: warn
+
+  # 5) Remediation gate — the inverted exploit suite (app/test_exploits.py) must
+  #    pass, asserting all six planted exploits stay BLOCKED. This is the hard
+  #    gate: reintroduce a vulnerability and CI goes red.
+  regression:
+    name: Remediation gate (test_exploits.py)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install app dependencies
+        run: pip install -r app/requirements.txt
+      - name: Seed DB and run the remediation regression suite
+        working-directory: app
+        run: |
+          python db.py
+          python test_exploits.py
