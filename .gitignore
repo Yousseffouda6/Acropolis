@@ -1,6 +1,8 @@
 # Secrets & environment
 .env
 .env.*
+# ...but DO track the committed placeholder template (it holds no real secrets):
+!.env.example
 secrets/
 credentials*
 

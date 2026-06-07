@@ -1,14 +1,14 @@
 # Acropolis — Multi-Domain Security Lab
 
-> Build it, secure it, attack it, detect it. A single repository that exercises the full secure-SDLC loop across application security, DevSecOps, cloud security, detection engineering, offensive testing, and post-quantum cryptography.
+> Build it, secure it, attack it, detect it, remediate it. A single repository that exercises the full secure-SDLC loop across application security, DevSecOps, cloud security, detection engineering, offensive testing, and post-quantum cryptography.
 
-![status](https://img.shields.io/badge/status-in%20active%20development-orange)
+![status](https://img.shields.io/badge/status-complete%20·%208%2F8%20phases-brightgreen)
 ![focus](https://img.shields.io/badge/focus-DevSecOps%20·%20AppSec%20·%20Detection%20Engineering-blue)
 ![cloud](https://img.shields.io/badge/deploy-hybrid%20cloud%20·%20containers-informational)
 ![pqc](https://img.shields.io/badge/crypto-post--quantum%20(ML--KEM)-purple)
 ![license](https://img.shields.io/badge/license-MIT-lightgrey)
 
-> **Status: in active development.** This repository is a living portfolio project. The architecture below is the target design; the roadmap tracks what is built, in progress, and planned. Commits are intentionally incremental so the project documents its own engineering process.
+> **Status: complete — all 8 phases shipped.** This repository is a portfolio project documenting the full secure-SDLC loop on a single artifact: build → secure → deploy → monitor → attack → detect → **remediate**. Commits are intentionally incremental so the project documents its own engineering process; the deliberately-vulnerable build is preserved at the tag `v1.0-vulnerable`.
 
 ---
 
@@ -84,7 +84,7 @@ Phase 0 establishes this repository and design. Subsequent phases are sequenced 
 - [x] **Phase 5 — Attack & detect (Offensive + Blue Team loop).** Attacked the live host from Kali across three vectors (SSH brute force, post-compromise host actions, web-layer attacks) and hunted each in Wazuh — surfacing the lab's sharpest lesson: a noisy scan raised ~7,000 alerts while a successful SQLi login bypass raised zero. See below.
 - [x] **Phase 6 — AI/LLM security.** Added an **AI Assistant** (`/ai`) with five planted LLM flaws — prompt injection, system-prompt secret leakage, insecure output handling (LLM-driven XSS), indirect prompt injection, and excessive agency. Red-teamed against both a frontier cloud model (Gemini 2.5 Flash Lite) and a local unaligned model (TinyLlama 1.1B via Ollama); all five confirmed. See below.
 - [x] **Phase 7 — Post-quantum cryptography.** Built a runnable demo of the two NIST PQC standards via Open Quantum Safe — **ML-KEM-768** (FIPS 203, IBM's CRYSTALS-Kyber) key exchange and **ML-DSA-65** (FIPS 204, CRYSTALS-Dilithium) signatures — measured their 3–8x size cost against RSA-3072, and inventoried every use of cryptography in Phases 1–5 as quantum-safe (symmetric) or quantum-vulnerable (asymmetric). See below.
-- [ ] **Phase 8 — Remediation & publication.** Fix every planted flaw, verify the pipeline goes green and alerts go quiet, record a short demo, publish per-phase writeups.
+- [x] **Phase 8 — Remediation & publication.** Fixed all **13** planted flaws (6 app + 5 AI + 2 bonus) with features intact, **inverted the exploit suite into a remediation gate** (6/6 now means *exploits blocked*), and flipped the DevSecOps pipeline to **blocking**. The vulnerable build is preserved at the tag `v1.0-vulnerable`. See below.
 
 ---
 
@@ -200,6 +200,42 @@ The lab's forward-looking module. There is no exploit and no flag — the advers
 The phase closes with a **cryptographic inventory** of everything built in Phases 1–5: the session-cookie HMAC (symmetric → quantum-safe; its hardcoded-key flaw was a *classical* issue, fixed in Phase 8) versus the asymmetric TLS/SSH handshakes. The **nginx front door is already migrated** to hybrid **X25519MLKEM768** (TLS 1.3, OpenSSL 3.5.5; config in [`infra/nginx-acropolis.conf`](./infra/nginx-acropolis.conf)); SSH and the Wazuh dashboard TLS remain classical (known future work). You cannot migrate what you cannot see; the inventory is the realistic first step.
 
 Scope note: this module covers post-quantum cryptography (software). Quantum Key Distribution is a hardware/photonics discipline and is intentionally out of scope; it is discussed conceptually in the accompanying writeup but not implemented.
+
+---
+
+## Phase 8 — Remediation & publication
+
+The loop closes. Phase 8 lifts the lab's standing "never fix the flaws" rule and does the opposite: it **remediates every planted vulnerability**, hardens the app, and turns the report-only pipeline into a blocking gate. The original vulnerable build is preserved at the git tag **`v1.0-vulnerable`** for demonstrations.
+
+- **6 app flaws fixed** — environment-sourced secrets · parameterised SQL + hashed passwords · enforced note ownership (IDOR → 404) · `yaml.safe_load` · removed the unused vulnerable `requests` · `nh3`-sanitised HTML output — plus the two bonus issues (`debug` off by default; salted password hashes).
+- **5 AI/LLM flaws fixed** — the secret is gone from the system prompt; the assistant is **read-only** (note-mutation tools removed); replies are sanitised; and note content is treated as untrusted data with an output guard. Prompt injection is **mitigated by defense in depth, not eliminated** — stated plainly.
+- **The safety nets were turned around** — `app/test_exploits.py` is **inverted** so 6/6 now means *exploits blocked*, and the DevSecOps pipeline is **blocking**: Semgrep/Trivy/gitleaks/ZAP no longer `continue-on-error`, plus a new CI job runs the regression gate. A reintroduced flaw breaks the build.
+
+The full before → after for all 13 fixes — with OWASP/CWE references and a security-posture table — is in [`writeups/phase-8-remediation.md`](./writeups/phase-8-remediation.md).
+
+---
+
+## Running it
+
+The application lives in [`app/`](./app); full instructions are in [`app/README.md`](./app/README.md).
+
+```bash
+cd app
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env        # optional — all variables are optional for local use
+python db.py                # seed acropolis.db
+python app.py               # http://127.0.0.1:5000
+python test_exploits.py     # 6/6 — all planted exploits blocked
+```
+
+**See the original, deliberately-vulnerable lab** — every flaw live, the old "6/6 exploitable" suite — by checking out the preserved tag:
+
+```bash
+git checkout v1.0-vulnerable
+```
+
+**Tech stack.** Flask · SQLite · Jinja2 · Markdown + nh3 · Werkzeug auth · GitHub Actions (Semgrep · Trivy · gitleaks · OWASP ZAP) · Docker · AWS EC2 · Wazuh · Kali Linux · Open Quantum Safe (liboqs) · nginx (hybrid-PQC TLS).
 
 ---
 
