@@ -55,7 +55,8 @@
       via {% if backend == 'local' %}Ollama / TinyLlama (local — unfiltered){% else %}Google Gemini ({{ gemini_model }}){% endif %}
     </small>
   </h2>
-  {# VULN: LLM output rendered unescaped (LLM02 insecure output handling) -> model-driven XSS. #}
+  {# reply is sanitised server-side by render_markdown()/nh3 (Phase 8, AI-3),
+     so emitting it is safe — model-driven script tags and handlers are stripped. #}
   <div class="ai-reply__body markdown">{{ reply|safe }}</div>
 </section>
 {% endif %}
