@@ -3,13 +3,16 @@
 Run ``python db.py`` to (re)create ``acropolis.db`` with the demo accounts and
 notes used by the app and by ``test_exploits.py``.
 
-This is an INTENTIONALLY VULNERABLE training application. Passwords are stored
-in plaintext on purpose (a planted bonus flaw); see
-``writeups/phase-1-appsec.md`` for the full catalogue.
+Phase 8 (remediation) hardened the app: seeded passwords are now stored as
+salted hashes (werkzeug), not plaintext. The original vulnerable build — with
+plaintext passwords and the planted flaws — is preserved at the git tag
+``v1.0-vulnerable``; see ``writeups/phase-8-remediation.md``.
 """
 
 import os
 import sqlite3
+
+from werkzeug.security import generate_password_hash
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "acropolis.db")
 
@@ -24,7 +27,7 @@ DROP TABLE IF EXISTS users;
 CREATE TABLE users (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     username   TEXT UNIQUE NOT NULL,
-    password   TEXT NOT NULL,                 -- stored in plaintext on purpose
+    password   TEXT NOT NULL,                 -- salted hash (werkzeug), never plaintext
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -40,7 +43,9 @@ CREATE TABLE notes (
 );
 """
 
-# (username, password) - passwords are intentionally plaintext.
+# (username, plaintext_password) — the plaintext here is only the seed input;
+# init_db() stores a salted hash, never the plaintext itself. Login still
+# accepts these same passwords as typed.
 USERS = [
     ("alice", "password123"),
     ("bob", "letmein"),
@@ -139,7 +144,7 @@ def init_db():
     for username, password in USERS:
         cur.execute(
             "INSERT INTO users (username, password) VALUES (?, ?)",
-            (username, password),
+            (username, generate_password_hash(password)),
         )
         user_ids[username] = cur.lastrowid
 

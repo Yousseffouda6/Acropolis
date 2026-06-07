@@ -7,8 +7,8 @@
 
   <article class="card note-doc">
     <header class="note-doc__head">
-      {# VULN #6: title rendered as raw HTML (no escaping). #}
-      <h1 class="note-doc__title">{{ note.title|safe }}</h1>
+      {# Title is auto-escaped (Phase 8): it is plain text, never raw HTML. #}
+      <h1 class="note-doc__title">{{ note.title }}</h1>
       <p class="note-doc__meta">
         by <strong>{{ owner }}</strong>
         &middot; updated {{ note.updated_at[:16] }}
@@ -22,7 +22,8 @@
       {% endif %}
     </header>
 
-    {# VULN #6: Markdown rendered to HTML with no sanitisation, emitted raw. #}
+    {# body_html is sanitised server-side by render_markdown()/nh3 (Phase 8),
+       so emitting it is safe — script tags and event handlers are stripped. #}
     <div class="note-doc__body markdown">{{ body_html|safe }}</div>
   </article>
 

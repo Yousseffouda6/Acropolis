@@ -10,10 +10,11 @@ click==8.1.7
 blinker==1.8.2
 
 # Feature libraries
-PyYAML==6.0.2          # YAML import/export (VULN #4 sink uses the unsafe loader)
-Markdown==3.6          # Markdown -> HTML rendering (rendered unsafely, VULN #6)
+PyYAML==6.0.2          # YAML import/export (parsed with yaml.safe_load)
+Markdown==3.6          # Markdown -> HTML rendering (output sanitised with nh3)
+nh3==0.2.18            # HTML sanitiser applied to all rendered note / AI HTML (XSS fix)
 python-dotenv==1.0.1   # load GEMINI_API_KEY (Phase 6 AI) from a local .env
 
-# VULN #5: a knowingly outdated dependency kept for the SCA scanner to flag.
-# It is intentionally NOT imported anywhere at runtime.
-requests==2.19.1
+# Phase 8: the deliberately outdated `requests==2.19.1` pin (old VULN #5) was
+# removed — it was never imported (AI calls use the stdlib urllib), so the app
+# now ships no known-vulnerable dependency.

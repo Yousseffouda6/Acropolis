@@ -6,14 +6,16 @@ tag and search them, import/export) that intentionally ships with a catalogue of
 planted security flaws. Each flaw is marked inline with a ``VULN #n`` comment and
 documented end to end in ``writeups/phase-1-appsec.md``.
 
-Planted vulnerabilities (do NOT fix - they are the learning objective):
-  #1 Hardcoded secrets (SECRET_KEY, ADMIN_API_KEY) live in source.
-  #2 SQL injection in the login query (raw string concatenation).
-  #3 IDOR on the view-note route (fetch by id, no ownership check).
-  #4 Insecure deserialization in YAML import (yaml.Loader -> RCE).
-  #5 Vulnerable dependency pinned in requirements.txt (requests==2.19.1).
-  #6 Stored XSS: note titles/bodies render as raw, unsanitised HTML.
-  Bonus: debug=True in production, passwords stored in plaintext.
+Phase 8 (remediation) fixed every planted flaw; this file is now the HARDENED
+build. The original vulnerable version is preserved at the git tag
+``v1.0-vulnerable``. What changed, by old vuln id:
+  #1 Secrets read from the environment (random SECRET_KEY fallback); none in source.
+  #2 Login uses a parameterised query + hashed-password check (no SQL bypass).
+  #3 view-note enforces ownership (non-owners get 404); the IDOR is closed.
+  #4 YAML import uses yaml.safe_load (no object construction / RCE).
+  #5 The unused, vulnerable ``requests`` pin was removed from requirements.txt.
+  #6 Rendered note / Markdown HTML is sanitised with nh3 (stored XSS removed).
+  Bonus: debug defaults OFF; passwords are stored as salted hashes.
 
 Phase 6 (AI/LLM security) adds an ``/ai`` assistant backed by Google's Gemini
 API, with three more planted flaws mapped to the OWASP Top 10 for LLM apps:
@@ -25,11 +27,13 @@ API, with three more planted flaws mapped to the OWASP Top 10 for LLM apps:
 import json
 import os
 import re
+import secrets
 import urllib.error
 import urllib.request
 from functools import wraps
 
 import markdown
+import nh3
 import yaml
 from dotenv import load_dotenv
 from flask import (
@@ -44,6 +48,8 @@ from flask import (
     url_for,
 )
 
+from werkzeug.security import check_password_hash, generate_password_hash
+
 from db import get_connection
 
 # Load a local .env (gitignored) so secrets like GEMINI_API_KEY are available
@@ -52,9 +58,14 @@ from db import get_connection
 # missing .env is simply ignored - which is the norm in Docker and on the cloud.
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
-# --- VULN #1: hardcoded secrets committed straight into source -------------
-SECRET_KEY = "acropolis-dev-secret-key-2026-do-not-rotate"
-ADMIN_API_KEY = "acro_live_sk_8f3b1c9d2e5a4f6b7c8d9e0f1a2b3c4d"
+# Secrets are read from the environment (Phase 8 remediation). SECRET_KEY signs
+# the session cookie; if it is unset we generate a strong random key at startup
+# so the app still boots in dev — but a generated key changes on every restart
+# (invalidating existing sessions), so production MUST set it explicitly via the
+# environment / a secret manager. ADMIN_API_KEY is likewise read from the
+# environment and never hardcoded; it is empty unless provided.
+SECRET_KEY = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
+ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "")
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
@@ -118,13 +129,18 @@ def excerpt(body, length=160):
 
 
 def render_markdown(text):
-    """Render Markdown to HTML.
+    """Render Markdown to HTML, then SANITISE the result (Phase 8 remediation).
 
-    VULN #6 (stored XSS): there is NO output sanitisation here. Raw HTML embedded
-    in a note - including ``<script>`` - passes straight through, and the template
-    emits the result with ``|safe``, so it executes when the note is viewed.
+    Markdown is rendered to HTML and then run through ``nh3`` (a maintained HTML
+    sanitiser) before it is ever marked safe in a template. nh3 keeps the
+    formatting tags Markdown produces (headings, lists, tables, ``<pre><code>``,
+    links, …) but strips dangerous constructs — ``<script>``, inline event
+    handlers, ``javascript:`` URLs — which closes the stored-XSS sink (old
+    VULN #6) while leaving normal note formatting intact. The same chokepoint
+    also sanitises the AI assistant's reply (old AI-3).
     """
-    return markdown.markdown(text or "", extensions=["fenced_code", "tables", "nl2br"])
+    html = markdown.markdown(text or "", extensions=["fenced_code", "tables", "nl2br"])
+    return nh3.clean(html)
 
 
 def login_required(view):
@@ -168,10 +184,11 @@ def register():
             flash("Choose a username and a password to continue.", "error")
             return render_template("register.html", username=username)
         try:
-            # Passwords are stored in plaintext on purpose (bonus flaw).
+            # Store only a salted password hash (Phase 8 remediation), never the
+            # plaintext the user typed.
             user_id = execute_db(
                 "INSERT INTO users (username, password) VALUES (?, ?)",
-                (username, password),
+                (username, generate_password_hash(password)),
             )
         except Exception:
             flash("That username is already taken.", "error")
@@ -189,24 +206,14 @@ def login():
         username = request.form.get("username", "")
         password = request.form.get("password", "")
 
-        # --- VULN #2: SQL injection ---------------------------------------- #
-        # The login query is assembled by concatenating untrusted input directly
-        # into the SQL string. A username of  ' OR '1'='1' --  bypasses auth.
-        query = (
-            "SELECT * FROM users WHERE username = '"
-            + username
-            + "' AND password = '"
-            + password
-            + "'"
+        # Parameterised lookup by username, then verify the password against its
+        # stored hash (Phase 8 remediation). Untrusted input never touches SQL
+        # string construction, so the old  ' OR '1'='1' --  auth bypass no longer
+        # works; an unknown username and a wrong password fail identically.
+        row = query_db(
+            "SELECT * FROM users WHERE username = ?", (username,), one=True
         )
-        conn = get_connection()
-        try:
-            row = conn.execute(query).fetchone()
-        except Exception:
-            row = None
-        conn.close()
-
-        if row:
+        if row and check_password_hash(row["password"], password):
             session["user_id"] = row["id"]
             session["username"] = row["username"]
             flash(f"Welcome back, {row['username']}.", "success")
@@ -290,18 +297,19 @@ def new_note():
 @app.route("/notes/<int:note_id>")
 @login_required
 def view_note(note_id):
-    # --- VULN #3: IDOR ------------------------------------------------------ #
-    # The note is fetched by id ALONE, with no check that it belongs to the
-    # signed-in user. Any authenticated user can read any note - including the
-    # admin's note holding the flag - simply by changing the id in the URL.
+    # Ownership is enforced here (Phase 8 remediation): a note may only be read
+    # by the user who owns it. A non-owner — or a missing id — gets a 404; we
+    # deliberately do not distinguish "not yours" from "does not exist", so the
+    # route leaks nothing about other users' notes. This closes the old IDOR
+    # (VULN #3) that let any user read the admin's flag note by guessing its id.
     note = query_db("SELECT * FROM notes WHERE id = ?", (note_id,), one=True)
-    if note is None:
+    if note is None or note["user_id"] != session["user_id"]:
         abort(404)
 
     owner = query_db(
         "SELECT username FROM users WHERE id = ?", (note["user_id"],), one=True
     )
-    # VULN #6: body rendered to HTML with no sanitisation, emitted via |safe.
+    # Body is rendered through render_markdown(), which now sanitises the HTML.
     body_html = render_markdown(note["body"])
 
     return render_template(
@@ -365,8 +373,9 @@ def delete_note(note_id):
 @app.route("/settings")
 @login_required
 def settings():
-    # VULN #1 surfaced in the UI: the hardcoded ADMIN_API_KEY is shown verbatim
-    # to any authenticated user.
+    # The API key shown here now comes from the ADMIN_API_KEY environment
+    # variable (Phase 8 remediation) — no secret is hardcoded. It is blank
+    # unless the operator provides one.
     return render_template("settings.html", api_key=ADMIN_API_KEY)
 
 
@@ -383,11 +392,11 @@ def import_notes():
         return redirect(url_for("settings"))
 
     try:
-        # --- VULN #4: insecure deserialization ----------------------------- #
-        # yaml.Loader is the full, unsafe loader. YAML tags such as
-        #   !!python/object/apply:os.system ["id"]
-        # are constructed during parsing, giving arbitrary code execution.
-        data = yaml.load(raw, Loader=yaml.Loader)
+        # Safe deserialisation (Phase 8 remediation): yaml.safe_load only builds
+        # plain Python scalars / lists / dicts and refuses the !!python/object
+        # tags that gave arbitrary code execution under the old yaml.Loader
+        # (VULN #4).
+        data = yaml.safe_load(raw)
     except yaml.YAMLError as exc:
         flash(f"Could not parse that YAML: {exc}", "error")
         return redirect(url_for("settings"))
@@ -769,6 +778,9 @@ def handle_http_error(error):
 
 
 if __name__ == "__main__":
-    # Bonus flaw: debug=True exposes the interactive Werkzeug debugger / RCE
-    # console and verbose tracebacks. Bound to all interfaces for the container.
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    # debug is OFF by default (Phase 8 remediation): the interactive Werkzeug
+    # debugger is an RCE console and must never run outside local development.
+    # Opt in for local debugging only via FLASK_DEBUG=1. Still bound to all
+    # interfaces so the container can publish the port.
+    debug = os.environ.get("FLASK_DEBUG", "").lower() in ("1", "true", "yes")
+    app.run(host="0.0.0.0", port=5000, debug=debug)
