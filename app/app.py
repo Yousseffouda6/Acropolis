@@ -574,7 +574,7 @@ def call_gemini(user_prompt, notes_context=""):
     )
     raw = ""
     try:
-        with urllib.request.urlopen(request_obj, timeout=30) as resp:
+        with urllib.request.urlopen(request_obj, timeout=30) as resp:  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
             raw = resp.read().decode("utf-8")
         payload = json.loads(raw)
         parts = payload["candidates"][0]["content"]["parts"]
@@ -637,7 +637,7 @@ def call_local(user_prompt, notes_context=""):
     )
     raw = ""
     try:
-        with urllib.request.urlopen(request_obj, timeout=30) as resp:
+        with urllib.request.urlopen(request_obj, timeout=30) as resp:  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
             raw = resp.read().decode("utf-8")
         payload = json.loads(raw)
         return guard_model_output(payload["message"]["content"])

@@ -1,19 +1,19 @@
 # Acropolis Notes - pinned dependencies.
 #
 # Web framework + its stack
-Flask==3.0.3
-Werkzeug==3.0.3
-Jinja2==3.1.4
-MarkupSafe==2.1.5
+Flask==3.1.3           # 3.0.3 → 3.1.3: fixes GHSA-4f9r-r8q9-mq8j session-caching disclosure
+Werkzeug==3.1.8        # 3.0.3 → 3.1.8: fixes CVE-2024-49767 (resource exhaustion) + Windows safe_join CVEs
+Jinja2==3.1.6          # 3.1.4 → 3.1.6: fixes CVE-2024-56201 + CVE-2024-56326 sandbox-breakout CVEs
+MarkupSafe==3.0.3      # 2.1.5 → 3.0.3: required by Flask/Werkzeug/Jinja2 3.1.x
 itsdangerous==2.2.0
-click==8.1.7
-blinker==1.8.2
+click==8.1.8           # 8.1.7 → 8.1.8: latest patch (required by Flask 3.1.3)
+blinker==1.9.0         # 1.8.2 → 1.9.0: required by Flask 3.1.3 (blinker>=1.9.0)
 
 # Feature libraries
 PyYAML==6.0.2          # YAML import/export (parsed with yaml.safe_load)
-Markdown==3.6          # Markdown -> HTML rendering (output sanitised with nh3)
+Markdown==3.9          # 3.6 → 3.9: fixes GHSA-jh85-wwwp-qpgx DoS via malformed HTML sequences
 nh3==0.2.18            # HTML sanitiser applied to all rendered note / AI HTML (XSS fix)
-python-dotenv==1.0.1   # load GEMINI_API_KEY (Phase 6 AI) from a local .env
+python-dotenv==1.2.1   # 1.0.1 → 1.2.1: fixes GHSA-jjg5-7h6f-q8fq symlink-overwrite CVE
 
 # Phase 8: the deliberately outdated `requests==2.19.1` pin (old VULN #5) was
 # removed — it was never imported (AI calls use the stdlib urllib), so the app

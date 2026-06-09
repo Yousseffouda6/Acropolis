@@ -14,7 +14,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Application code, templates and static assets.
 COPY . .
 
+# Drop to a non-root user — gives the process the minimum privilege it needs.
+# chown first so the user can create the SQLite database at runtime.
+RUN adduser --disabled-password --gecos "" appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 5000
 
-# Seed the SQLite database, then start the app (debug server, by design).
+# Seed the SQLite database, then start the app.
 CMD ["sh", "-c", "python db.py && python app.py"]
