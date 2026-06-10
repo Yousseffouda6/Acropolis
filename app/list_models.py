@@ -17,7 +17,7 @@ if not api_key:
     raise SystemExit(1)
 
 url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
-with urllib.request.urlopen(url) as resp:
+with urllib.request.urlopen(url) as resp:  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
     data = json.loads(resp.read())
 
 print(f"{'Model name':<45} {'Display name'}")

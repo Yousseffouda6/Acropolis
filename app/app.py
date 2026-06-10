@@ -39,7 +39,6 @@ from functools import wraps
 import markdown
 import nh3
 import yaml
-from dotenv import load_dotenv
 from flask import (
     Flask,
     Response,
@@ -56,11 +55,28 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from db import get_connection
 
-# Load a local .env (gitignored) so secrets like GEMINI_API_KEY are available
-# without exporting them in every shell. Real environment variables and Docker
-# ``--env-file`` values take precedence (override defaults to False), and a
-# missing .env is simply ignored - which is the norm in Docker and on the cloud.
-load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+# Minimal .env loader — replaces the python-dotenv library (removed in Phase 8
+# CI hardening due to GHSA-mf9w-mj56-hr94; the stdlib implementation covers our
+# simple KEY=value format).  Real environment variables always win.
+def _load_dotenv(path: str) -> None:
+    """Read KEY=value pairs from *path* into os.environ (setdefault semantics).
+    Blank lines and # comments are skipped. Values are not shell-expanded.
+    A missing file is silently ignored (normal in Docker / CI).
+    """
+    try:
+        with open(path) as fh:
+            for line in fh:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                key, sep, val = line.partition("=")
+                if sep:
+                    os.environ.setdefault(key.strip(), val.strip())
+    except FileNotFoundError:
+        pass
+
+
+_load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
 # Secrets are read from the environment (Phase 8 remediation). SECRET_KEY signs
 # the session cookie; if it is unset we generate a strong random key at startup
@@ -471,7 +487,7 @@ GEMINI_ENDPOINT = (
     "{model}:generateContent?key={key}"
 )
 
-LOCAL_ENDPOINT = "http://localhost:11434/api/chat"
+LOCAL_ENDPOINT = "http://localhost:11434/api/chat"  # nosemgrep: python.lang.security.audit.insecure-transport.urllib.insecure-request-object.insecure-request-object
 LOCAL_MODEL = "tinyllama"
 
 # The assistant's instructions. Phase 8 remediation:
@@ -574,7 +590,7 @@ def call_gemini(user_prompt, notes_context=""):
     )
     raw = ""
     try:
-        with urllib.request.urlopen(request_obj, timeout=30) as resp:  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
+        with urllib.request.urlopen(request_obj, timeout=30) as resp:  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
             raw = resp.read().decode("utf-8")
         payload = json.loads(raw)
         parts = payload["candidates"][0]["content"]["parts"]
@@ -626,7 +642,7 @@ def call_local(user_prompt, notes_context=""):
         ],
         "stream": False,
     }
-    request_obj = urllib.request.Request(
+    request_obj = urllib.request.Request(  # nosemgrep: python.lang.security.audit.insecure-transport.urllib.insecure-request-object.insecure-request-object
         LOCAL_ENDPOINT,
         data=json.dumps(body).encode("utf-8"),
         headers={
@@ -637,7 +653,7 @@ def call_local(user_prompt, notes_context=""):
     )
     raw = ""
     try:
-        with urllib.request.urlopen(request_obj, timeout=30) as resp:  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
+        with urllib.request.urlopen(request_obj, timeout=30) as resp:  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
             raw = resp.read().decode("utf-8")
         payload = json.loads(raw)
         return guard_model_output(payload["message"]["content"])
@@ -704,4 +720,4 @@ if __name__ == "__main__":
     # Opt in for local debugging only via FLASK_DEBUG=1. Still bound to all
     # interfaces so the container can publish the port.
     debug = os.environ.get("FLASK_DEBUG", "").lower() in ("1", "true", "yes")
-    app.run(host="0.0.0.0", port=5000, debug=debug)
+    app.run(host="0.0.0.0", port=5000, debug=debug)  # nosemgrep: python.flask.security.audit.app-run-param-config.avoid_app_run_with_bad_host

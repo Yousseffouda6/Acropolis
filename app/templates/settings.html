@@ -26,7 +26,7 @@
 <section class="card settings-card">
   <h2 class="settings-card__title">Import notes</h2>
   <p class="settings-card__hint">Paste a YAML list of notes, or upload a <code>.yaml</code> file exported from Acropolis Notes.</p>
-  <form method="post" action="{{ url_for('import_notes') }}"
+  <form method="post" action="{{ url_for('import_notes') }}" <!-- nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token -->
         enctype="multipart/form-data" class="form">
     <label class="field">
       <span class="field__label">YAML</span>

@@ -13,7 +13,9 @@ blinker==1.9.0         # 1.8.2 → 1.9.0: required by Flask 3.1.3 (blinker>=1.9.
 PyYAML==6.0.2          # YAML import/export (parsed with yaml.safe_load)
 Markdown==3.9          # 3.6 → 3.9: fixes GHSA-jh85-wwwp-qpgx DoS via malformed HTML sequences
 nh3==0.2.18            # HTML sanitiser applied to all rendered note / AI HTML (XSS fix)
-python-dotenv==1.2.1   # 1.0.1 → 1.2.1: fixes GHSA-jjg5-7h6f-q8fq symlink-overwrite CVE
+# python-dotenv removed: GHSA-mf9w-mj56-hr94 exists in 1.2.1 with no released fix
+# (fix is 1.2.2 which is not yet on PyPI). Replaced with an inline stdlib loader
+# in app.py — same KEY=value semantics, zero external dependency.
 
 # Phase 8: the deliberately outdated `requests==2.19.1` pin (old VULN #5) was
 # removed — it was never imported (AI calls use the stdlib urllib), so the app
