@@ -33,7 +33,7 @@ flowchart LR
 
 The spine is one Git repository. Layered onto the core loop are two cross-cutting modules: a **post-quantum cryptography** module (ML-KEM hybrid key exchange) and an **AI/LLM security** module (a model-backed feature, red-teamed against the OWASP LLM Top 10). Both flow through the same pipeline, deployment, and detection stages as everything else.
 
-The lab is built to run efficiently on Apple Silicon: containers (multi-arch, ARM-native) for the application and tooling, a single Kali Linux VM as the attacker, and a free-tier ARM cloud instance for live, internet-exposed deployment.
+The lab is built to run efficiently on Apple Silicon: multi-arch (ARM-native) containers for the application and tooling, a single Kali Linux VM as the attacker, and a free-tier AWS EC2 instance for a live deployment that is deliberately kept **off** the public internet (reached over an SSH tunnel).
 
 ---
 
@@ -41,13 +41,13 @@ The lab is built to run efficiently on Apple Silicon: containers (multi-arch, AR
 
 | Domain | What the lab does | Primary tooling |
 | --- | --- | --- |
-| Application Security | A purpose-built vulnerable web app with planted flaws (SQLi, IDOR, hardcoded secret, vulnerable dependency); secure code review | Python (Flask/FastAPI) or Node, OWASP Juice Shop |
-| DevSecOps | A CI/CD security gate that scans every commit and blocks high-severity findings before merge | GitHub Actions, Semgrep (SAST), Trivy/Grype (SCA + image), gitleaks (secrets), OWASP ZAP (DAST) |
-| Cloud Security | Containerized deployment to a live cloud instance under least-privilege IAM and network controls, with one deliberate misconfiguration as an attack surface | Oracle Cloud Always Free (ARM) / AWS, Docker |
-| Blue Team / Detection Engineering | Centralized host and network telemetry, dashboards, and custom detection rules written in response to observed attacks | Wazuh (SIEM + HIDS), Suricata (optional NIDS) |
-| Offensive Security | A scoped engagement against the live target, then a pivot to detecting the analyst's own footprints | Kali Linux, nmap, sqlmap, Burp Suite, ffuf |
-| Post-Quantum Cryptography | A hybrid classical/post-quantum key exchange using the NIST-standardized, IBM-developed ML-KEM (FIPS 203) algorithm | Open Quantum Safe (liboqs, oqs-provider) |
-| AI / LLM Security | An LLM-backed application feature, tested for prompt injection and data leakage, then hardened with input/output guardrails | OWASP LLM Top 10, MITRE ATLAS |
+| Application Security | A purpose-built vulnerable web app with planted flaws (SQLi, IDOR, hardcoded secret, insecure deserialization, vulnerable dependency, stored XSS); secure code review | Python (Flask) + SQLite — custom app, no framework |
+| DevSecOps | A CI/CD security gate that scans every commit and (from Phase 8) blocks high-severity findings | GitHub Actions, Semgrep (SAST), Trivy (SCA + image), gitleaks (secrets), OWASP ZAP (DAST) |
+| Cloud Security | Containerized deployment to a live cloud instance under least-privilege network controls — deliberately never exposed to the public internet, reached via SSH tunnel | AWS EC2 (free tier), Docker, nginx |
+| Blue Team / Detection Engineering | Centralized host telemetry, dashboards, and detection rules written in response to observed attacks | Wazuh (SIEM + HIDS) |
+| Offensive Security | A scoped engagement against the live target, then a pivot to detecting the attacker's own footprints | Kali Linux, hydra, nikto, manual web exploitation |
+| Post-Quantum Cryptography | A hybrid classical/post-quantum key exchange using the NIST-standardized, IBM-developed ML-KEM (FIPS 203) algorithm | Open Quantum Safe (liboqs); OpenSSL 3.5 (nginx hybrid TLS) |
+| AI / LLM Security | An LLM-backed application feature, tested for prompt injection and data leakage, then hardened with input/output guardrails | OWASP LLM Top 10 |
 
 ---
 
@@ -94,7 +94,7 @@ The Phase 1 deliverable is **Acropolis Notes**, a server-rendered Flask + SQLite
 
 **Product features:** account register / login / logout · Markdown notes with create / view / edit / delete · tags and tag filtering · live client-side search · dashboard with per-account stats and empty states · YAML import / export · settings & profile · a custom, responsive UI (no framework).
 
-**Planted vulnerabilities (by design):** hardcoded secrets · SQL injection (login) · IDOR · insecure YAML deserialization (RCE) · known-vulnerable dependency · stored XSS — plus the bonus flaws `debug=True` and plaintext passwords. An exploit regression suite (`app/test_exploits.py`) asserts all six are still exploitable (**6/6 passing**).
+**Planted vulnerabilities (by design):** hardcoded secrets · SQL injection (login) · IDOR · insecure YAML deserialization (RCE) · known-vulnerable dependency · stored XSS — plus the bonus flaws `debug=True` and plaintext passwords. An exploit regression suite (`app/test_exploits.py`) originally asserted all six were exploitable (**6/6**); Phase 8 inverted it, so a passing 6/6 on `main` now means every exploit is **blocked**.
 
 > ⚠️ Acropolis Notes **intentionally** contains planted secrets and exploitable vulnerabilities for security education. Do not deploy it publicly, and do not store real data in it.
 
@@ -227,6 +227,15 @@ cp .env.example .env        # optional — all variables are optional for local 
 python db.py                # seed acropolis.db
 python app.py               # http://127.0.0.1:5000
 python test_exploits.py     # 6/6 — all planted exploits blocked
+```
+
+Or run it in a container (the image runs as a non-root user; secrets are passed at
+runtime via `--env-file`, never baked in):
+
+```bash
+cd app
+docker build -t acropolis-notes .
+docker run --rm -p 5000:5000 acropolis-notes   # seeds the DB, then serves on http://127.0.0.1:5000
 ```
 
 **See the original, deliberately-vulnerable lab** — every flaw live, the old "6/6 exploitable" suite — by checking out the preserved tag:
