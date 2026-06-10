@@ -5,6 +5,11 @@ FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
+# Patch base-image OS packages before anything else so known-fixed CVEs
+# (e.g. CVE-2026-45447 in openssl/libssl3t64) are resolved at build time.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Install dependencies first to keep this layer cached across code changes.
